@@ -257,11 +257,32 @@ esp_err_t MosWebServer::output_post_handler(httpd_req_t* req) {
 // POST /uart_test — {"ms": 3000}, transmit for that long so the RS485 module's
 // TX LED lights and the transmit half of the wiring can be proved before a
 // master exists. Blocks for the duration; the response comes afterwards.
+//
+// Refused while a master is actually driving the bus. This puts raw bytes on the
+// shared RS485 pair for seconds at a time, which collides with every Modbus
+// transaction for the duration and trips the node's failsafe — on a moving
+// vehicle, that is the driving lights going out. It was written as a bench tool
+// back when reaching it meant a serial cable; it is now one curl away over
+// Wi-Fi, so it needs to say no by itself.
 esp_err_t MosWebServer::uart_test_post_handler(httpd_req_t* req) {
-    int ms = 3000;
+    auto* self = static_cast<MosWebServer*>(req->user_ctx);
+
+    int  ms    = 3000;
+    bool force = false;
     if (req->content_len > 0 && req->content_len <= (int)kMaxJsonBodyBytes) {
         JsonWrapper json = JsonWrapper::Parse(read_request_body(req));
-        if (!json.Empty()) json.GetField("ms", ms);
+        if (!json.Empty()) {
+            json.GetField("ms", ms);
+            json.GetField("force", force);
+        }
+    }
+
+    // Silence for longer than the failsafe window means nothing is controlling
+    // this node, so there is nothing to jam.
+    if (!force && node::msSinceLastWrite() < (uint32_t)self->settings_.failsafeMs) {
+        return sendJsonError(req, 409,
+                             "a master is driving the bus; transmitting would jam it "
+                             "(resend with \"force\":true if that is intended)");
     }
 
     const int sent = node::uartTest(ms);

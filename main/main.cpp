@@ -54,9 +54,6 @@ namespace {
 
 constexpr const char* TAG = "mosnode";
 
-// How long a freshly OTA'd image has to obtain an IP before it is rolled back.
-constexpr int kOtaVerifyTimeoutMs = 120000;
-
 void* g_slave = nullptr;
 
 // Signalled by the got-IP handler; otaVerifyTask waits on it.
@@ -95,6 +92,17 @@ uint32_t g_failsafeMs = 5000;
 // without spamming a line per heartbeat.
 bool g_applied[cfg::kChannelCount] = {};
 
+// Serialises applyCoils. Three unrelated contexts drive the gates — the coil
+// task, the failsafe, and an HTTP POST /output — and without this two of them
+// can interleave inside the compare-drive-record sequence below and leave a pin
+// disagreeing with what the node reports.
+//
+// It does not cover the Modbus stack's own write into g_coils, which happens
+// inside the component where we cannot reach. That one is harmless: the worst
+// case is acting on a value one transaction stale, and the next heartbeat
+// rewrites the true state.
+SemaphoreHandle_t g_applyLock = nullptr;
+
 void driveChannel(int i, bool on) {
     gpio_set_level(cfg::kChannels[i], (on != cfg::kActiveLow) ? 1 : 0);
 }
@@ -106,6 +114,7 @@ void driveChannel(int i, bool on) {
 // from power-on until this function runs and a floating gate on a logic-level
 // MOSFET will happily conduct.
 void initChannels() {
+    g_applyLock = xSemaphoreCreateMutex();
     for (int i = 0; i < cfg::kChannelCount; ++i) {
         const gpio_num_t p = cfg::kChannels[i];
         gpio_reset_pin(p);
@@ -127,19 +136,24 @@ void initChannels() {
 // Push the coil bits onto the gates. Logged only when something moves.
 void applyCoils(uint8_t bits, const char* why) {
     bool changed = false;
+    char s[cfg::kChannelCount + 1];
+
+    if (g_applyLock != nullptr) xSemaphoreTake(g_applyLock, portMAX_DELAY);
     for (int i = 0; i < cfg::kChannelCount; ++i) {
         const bool on = (bits >> i) & 1u;
-        if (on == g_applied[i]) continue;
-        driveChannel(i, on);
-        g_applied[i] = on;
-        changed = true;
+        if (on != g_applied[i]) {
+            driveChannel(i, on);
+            g_applied[i] = on;
+            changed = true;
+        }
+        s[i] = g_applied[i] ? '1' : '0';
     }
-    if (changed) {
-        char s[cfg::kChannelCount + 1];
-        for (int i = 0; i < cfg::kChannelCount; ++i) s[i] = g_applied[i] ? '1' : '0';
-        s[cfg::kChannelCount] = '\0';
-        ESP_LOGI(TAG, "channels %s (%s)", s, why);
-    }
+    s[cfg::kChannelCount] = '\0';
+    if (g_applyLock != nullptr) xSemaphoreGive(g_applyLock);
+
+    // Logged outside the lock: a console line is a blocking UART write of a
+    // millisecond or so, and the failsafe must never queue behind one.
+    if (changed) ESP_LOGI(TAG, "channels %s (%s)", s, why);
 }
 
 #if MOSNODE_WALK_ON_BOOT
@@ -257,29 +271,29 @@ void coilTask(void*) {
     }
 }
 
-// Confirms a freshly OTA'd image, or rolls back to the previous one.
+// Confirms a freshly OTA'd image once it has proved it can reach the network.
 //
-// Connectivity is the right health check here even though this node's real job
-// is Modbus, because an image that cannot reach the network cannot be replaced
-// except with a jumper and a power cycle on the bench. Pending-verify only ever
-// happens immediately after an OTA, which by definition happened somewhere with
-// Wi-Fi, so this cannot strand a node that is simply out riding.
+// Connectivity is the right health check even though this node's real job is
+// Modbus, because an image that cannot reach the network cannot be replaced
+// except with a jumper and a power cycle on the bench.
+//
+// There is deliberately no deadline on that wait. The bootloader already covers
+// both real failure modes: an image that crashes never reaches this point and is
+// rolled back on the next boot by CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE, and an
+// image that runs but cannot join Wi-Fi is left unconfirmed and rolled back at
+// the next power cycle. A timeout on top of that adds one behaviour only —
+// rebooting a node that is working, mid-ride, because it is out of Wi-Fi range.
+// This node is holding the driving lights on; a reboot drops them for the two
+// seconds it takes to get back to the coil task. Nothing is worth that.
 void otaVerifyTask(void*) {
     const esp_partition_t* running = esp_ota_get_running_partition();
     esp_ota_img_states_t state;
     if (esp_ota_get_state_partition(running, &state) == ESP_OK &&
         state == ESP_OTA_IMG_PENDING_VERIFY) {
-        ESP_LOGW(TAG, "OTA: image pending verify; waiting up to %ds for an IP",
-                 kOtaVerifyTimeoutMs / 1000);
-        if (xSemaphoreTake(s_got_ip, pdMS_TO_TICKS(kOtaVerifyTimeoutMs)) == pdTRUE) {
-            esp_ota_mark_app_valid_cancel_rollback();
-            ESP_LOGI(TAG, "OTA: connectivity confirmed, image marked valid");
-        } else {
-            ESP_LOGE(TAG, "OTA: no IP within timeout; rolling back");
-            esp_ota_mark_app_invalid_rollback_and_reboot();   // reboots on success
-            ESP_LOGE(TAG, "OTA: rollback not possible; keeping current image");
-            esp_ota_mark_app_valid_cancel_rollback();
-        }
+        ESP_LOGW(TAG, "OTA: image pending verify; waiting for an IP");
+        xSemaphoreTake(s_got_ip, portMAX_DELAY);
+        esp_ota_mark_app_valid_cancel_rollback();
+        ESP_LOGI(TAG, "OTA: connectivity confirmed, image marked valid");
     }
     vTaskDelete(nullptr);
 }
