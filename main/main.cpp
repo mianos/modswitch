@@ -7,10 +7,19 @@
 // specific to that, though — it is coils to gates, and the pin map is one
 // header away in Config.h.
 //
-// Deliberately has no Wi-Fi, no MQTT and no OTA. It sits inside a headlight
-// shell on a motorcycle, where the useful properties are booting in
-// milliseconds and having almost nothing that can fail. Its entire job is to
-// make four pins follow four bits.
+// It has Wi-Fi, an HTTP surface and OTA, added because this board's USB-serial
+// adapter has no DTR to IO0 and a wired reflash therefore means a jumper and a
+// power cycle. All of it is management only, started last and after the
+// actuator, and none of it is in the path that drives a gate.
+//
+// It deliberately has NO MQTT. It sits inside a headlight shell and is out of
+// broker range for almost every minute it is powered, so a client there would
+// be a blocking network dependency next to the actuator in exchange for
+// telemetry that almost never arrives. Everything it has to say fits in GET
+// /status, and if that state is ever wanted on a broker the master is the
+// place to do it: it already has a client, already talks to this node every
+// second, and can read it back over Modbus without this end growing a second
+// network stack. Its entire job is to make four pins follow four bits.
 //
 // Wiring:
 //   RS485 module DI <- GPIO32, RO -> GPIO33, DE+/RE <- GPIO25 (tie DE and /RE)
