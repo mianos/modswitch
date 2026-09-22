@@ -319,6 +319,32 @@ uint32_t msSinceLastWrite() {
     return (uint32_t)(((uint64_t)esp_timer_get_time() - g_lastWriteUs) / 1000ULL);
 }
 
+int uartTest(int ms) {
+    if (ms < 100)   ms = 100;
+    if (ms > 30000) ms = 30000;
+
+    uint8_t buf[32];
+    memset(buf, 0x55, sizeof(buf));
+
+    // Safe to write straight at the port even though esp-modbus owns it: the
+    // driver is installed and, with no master on the bus, the slave state
+    // machine is parked waiting on RX and has nothing in flight to corrupt.
+    // uart_write_bytes drives RTS/DE for us in half-duplex mode, and on an
+    // auto-direction transceiver that pin simply goes nowhere.
+    const int64_t end = esp_timer_get_time() + (int64_t)ms * 1000;
+    int total = 0;
+    while (esp_timer_get_time() < end) {
+        const int n = uart_write_bytes(cfg::kUartPort, buf, sizeof(buf));
+        if (n > 0) total += n;
+        // Drain before pausing, so DE is released between bursts and the gap
+        // is a real gap rather than the tail of the previous burst.
+        uart_wait_tx_done(cfg::kUartPort, pdMS_TO_TICKS(200));
+        vTaskDelay(pdMS_TO_TICKS(60));
+    }
+    ESP_LOGW(TAG, "uart test: %d bytes out on TX=%d", total, cfg::kPinTxd);
+    return total;
+}
+
 }  // namespace node
 
 extern "C" void app_main(void) {

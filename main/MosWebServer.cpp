@@ -74,13 +74,14 @@ esp_err_t MosWebServer::start() {
         httpd_method_t method;
         esp_err_t (*handler)(httpd_req_t*);
     };
-    static const std::array<Route, 6> routes = {{
-        {"/firmware", HTTP_POST, firmware_post_handler},
-        {"/firmware", HTTP_GET,  firmware_get_handler},
-        {"/config",   HTTP_GET,  config_get_handler},
-        {"/config",   HTTP_POST, config_post_handler},
-        {"/status",   HTTP_GET,  status_get_handler},
-        {"/output",   HTTP_POST, output_post_handler},
+    static const std::array<Route, 7> routes = {{
+        {"/firmware",  HTTP_POST, firmware_post_handler},
+        {"/firmware",  HTTP_GET,  firmware_get_handler},
+        {"/config",    HTTP_GET,  config_get_handler},
+        {"/config",    HTTP_POST, config_post_handler},
+        {"/status",    HTTP_GET,  status_get_handler},
+        {"/output",    HTTP_POST, output_post_handler},
+        {"/uart_test", HTTP_POST, uart_test_post_handler},
     }};
 
     for (const Route& r : routes) {
@@ -250,5 +251,24 @@ esp_err_t MosWebServer::output_post_handler(httpd_req_t* req) {
     resp.AddItem("channel", ch);
     resp.AddItem("state",   std::string(want ? "on" : "off"));
     resp.AddItem("coils",   (int)node::coils());
+    return send_json(req, resp);
+}
+
+// POST /uart_test — {"ms": 3000}, transmit for that long so the RS485 module's
+// TX LED lights and the transmit half of the wiring can be proved before a
+// master exists. Blocks for the duration; the response comes afterwards.
+esp_err_t MosWebServer::uart_test_post_handler(httpd_req_t* req) {
+    int ms = 3000;
+    if (req->content_len > 0 && req->content_len <= (int)kMaxJsonBodyBytes) {
+        JsonWrapper json = JsonWrapper::Parse(read_request_body(req));
+        if (!json.Empty()) json.GetField("ms", ms);
+    }
+
+    const int sent = node::uartTest(ms);
+
+    JsonWrapper resp;
+    resp.AddItem("sent_bytes", sent);
+    resp.AddItem("tx_gpio",    cfg::kPinTxd);
+    resp.AddItem("baud",       cfg::kBaud);
     return send_json(req, resp);
 }

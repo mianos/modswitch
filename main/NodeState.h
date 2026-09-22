@@ -43,4 +43,18 @@ bool     tripped();
 
 int channelCount();
 
+// Transmit a pattern on the RS485 port for `ms` milliseconds and return the
+// byte count.
+//
+// Bring-up only. A Modbus slave never speaks unbidden, so with no master on
+// the bus this node is silent forever and the module's TX LED never lights —
+// which looks identical to "the UART pin is wrong" or "the transceiver is
+// dead". This makes the port say something on demand, so the transmit half of
+// the wiring can be proved before the master exists.
+//
+// 0x55 is 01010101, so every bit toggles: it is the easiest pattern to
+// recognise on a scope and it keeps the LED evenly lit rather than flickering
+// at whatever duty a text string happens to have.
+int uartTest(int ms);
+
 }  // namespace node

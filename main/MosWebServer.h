@@ -16,6 +16,7 @@ struct Settings;
 //   POST /config     apply + persist a subset of settings
 //   GET  /status     channel states, coil image, failsafe and link counters
 //   POST /output     drive one channel by hand: {"channel":0,"set":"on"}
+//   POST /uart_test  transmit on RS485 so the module's TX LED lights
 //
 // POST /firmware is the reason this class exists. The board's USB-serial
 // adapter has no DTR to IO0, so a wired reflash means a jumper and a power
@@ -39,6 +40,7 @@ private:
     static esp_err_t config_post_handler(httpd_req_t* req);
     static esp_err_t status_get_handler(httpd_req_t* req);
     static esp_err_t output_post_handler(httpd_req_t* req);
+    static esp_err_t uart_test_post_handler(httpd_req_t* req);
 
     Settings& settings_;
 };
