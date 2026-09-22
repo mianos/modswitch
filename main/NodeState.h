@@ -43,6 +43,22 @@ bool     tripped();
 
 int channelCount();
 
+// The wall clock, as pushed into holding registers 0-1 by the master over
+// RS485 (see Config.h kTimeReg). This node has no RTC and no network, so
+// without the master it has no idea what time it is and reports 1970.
+//
+// timeSet() is false until a plausible epoch has arrived, which is what lets
+// /status say "unknown" rather than quietly presenting 1970 as a fact.
+// timeSyncs() counts accepted updates, so a clock that is being maintained can
+// be told from one that was set once and has been drifting since.
+bool     timeSet();
+uint32_t timeSyncs();
+
+// Wall clock of the most recent failsafe trip, or 0 if there has been none —
+// or if the clock was still unknown when it happened. A trip count that climbed
+// during a ride is much more useful with an hour attached to it.
+uint32_t lastTripAt();
+
 // Transmit a pattern on the RS485 port for `ms` milliseconds and return the
 // byte count.
 //

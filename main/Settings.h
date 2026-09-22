@@ -34,10 +34,17 @@ struct Settings : SettingsBase {
     // noise trips it. 5000ms is five missed heartbeats. Applies live.
     int failsafeMs = 5000;
 
+    // Timezone for reporting only. The master pushes UTC over RS485 (see
+    // Config.h kTimeReg); this is what turns it into a local timestamp in the
+    // log and in /status. Matches mqttcan's default so both ends of the bus
+    // read the same.
+    std::string tz = "AEST-10AEDT,M10.1.0,M4.1.0/3";
+
     explicit Settings(NvsStorageManager& nvs) : SettingsBase(nvs) {
         field("sensor_name",  sensorName);
         field("wifi_country", wifiCountry);
         field("failsafe_ms",  failsafeMs);
+        field("tz",           tz);
         load();
     }
 };

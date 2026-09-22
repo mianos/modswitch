@@ -76,6 +76,15 @@ constexpr uart_parity_t kParity    = UART_PARITY_DISABLE;
 // transaction covering every channel.
 constexpr uint16_t kCoilStart = 0;
 
+// Holding registers 0-1 carry a 32-bit Unix epoch, high word first, written by
+// the master with FC 0x10. Modbus has no function code for time, so this is a
+// convention between our two ends rather than a standard; mqttcan's
+// ModbusBus.h declares the same address, and a mismatch would be a silent
+// no-op. This node has no clock and no network, so this is the only way its
+// logs and its failsafe trips can carry a real timestamp.
+constexpr uint16_t kTimeReg      = 0;
+constexpr uint16_t kTimeRegCount = 2;
+
 // ---------------------------------------------------------------------------
 // Failsafe
 // ---------------------------------------------------------------------------

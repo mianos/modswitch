@@ -23,8 +23,14 @@
 // needs no resync logic — it browns out, reboots, and is correct again within
 // one heartbeat.
 
+// Standard library before the IDF headers: under picolibc, hal/assert.h
+// redefines __noreturn as [[noreturn]] and the C library then uses it as a
+// trailing attribute, which is a hard error in C++ if the order is reversed.
 #include <cinttypes>
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
+#include <sys/time.h>
 
 #include "driver/gpio.h"
 #include "driver/uart.h"
@@ -83,6 +89,20 @@ volatile uint64_t g_lastWriteUs = 0;
 uint32_t g_tripCount  = 0;
 uint32_t g_writeCount = 0;
 bool     g_trippedNow = false;
+
+// The clock the master pushes into holding registers 0-1. Written by the Modbus
+// stack from its own task, same argument as g_coils.
+volatile uint16_t g_timeRegs[cfg::kTimeRegCount] = {};
+
+// Set once the master has sent a plausible epoch, so /status can say whether
+// its timestamps mean anything rather than quietly reporting 1970.
+bool     g_timeSet   = false;
+uint32_t g_timeSyncs = 0;
+
+// Wall clock of the last failsafe trip, 0 when none or when the clock was not
+// yet known. This is the whole reason the node wants the time at all: a trip
+// count that climbed during a ride is far more useful with an hour attached.
+time_t   g_lastTripAt = 0;
 
 // Live copy of settings.failsafeMs, so the timeout can be tuned over HTTP
 // without a reflash. Read by failsafeTask on every pass.
@@ -195,6 +215,7 @@ void failsafeTask(void*) {
         if (g_trippedNow) continue;   // already off; stay quiet until comms return
         g_trippedNow = true;
         g_tripCount++;
+        g_lastTripAt = g_timeSet ? time(nullptr) : 0;
         g_coils = 0;
         applyCoils(0, "FAILSAFE: no master");
         ESP_LOGE(TAG, "no coil write for %" PRIu32 "ms - all channels off (trip %" PRIu32 ")",
@@ -227,7 +248,23 @@ esp_err_t modbusStart() {
     area.access       = MB_ACCESS_RW;
     err = mbc_slave_set_descriptor(g_slave, area);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "mbc_slave_set_descriptor: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "mbc_slave_set_descriptor(coils): %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // Holding registers for the clock the master pushes at us. A separate area
+    // from the coils on purpose: different function code, different event bit,
+    // and nothing about a clock update should be able to disturb the coil
+    // image that is holding the lights on.
+    mb_register_area_descriptor_t timeArea = {};
+    timeArea.type         = MB_PARAM_HOLDING;
+    timeArea.start_offset = cfg::kTimeReg;
+    timeArea.address      = (void*)&g_timeRegs[0];
+    timeArea.size         = sizeof(g_timeRegs);
+    timeArea.access       = MB_ACCESS_RW;
+    err = mbc_slave_set_descriptor(g_slave, timeArea);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "mbc_slave_set_descriptor(holding): %s", esp_err_to_name(err));
         return err;
     }
 
@@ -255,19 +292,45 @@ esp_err_t modbusStart() {
     return ESP_OK;
 }
 
-// Coil writes from the master. mbc_slave_check_event blocks until one arrives,
-// so this costs nothing while the bus is idle.
+// Writes from the master: coils, and the clock in the holding registers.
+// mbc_slave_check_event blocks until one arrives, so this costs nothing while
+// the bus is idle.
+//
+// Only a *coil* write feeds the failsafe. That is deliberate: the watchdog
+// measures how fresh the lamp command is, and a clock update is not a lamp
+// command. A master that had somehow gone on sending the time while no longer
+// driving the coils must still trip it.
 void coilTask(void*) {
     for (;;) {
-        mbc_slave_check_event(g_slave, (mb_event_group_t)MB_EVENT_COILS_WR);
+        mbc_slave_check_event(
+            g_slave, (mb_event_group_t)(MB_EVENT_COILS_WR | MB_EVENT_HOLDING_REG_WR));
 
         mb_param_info_t info;
         if (mbc_slave_get_param_info(g_slave, &info, MB_PAR_INFO_TOUT) != ESP_OK) continue;
-        if (!(info.type & MB_EVENT_COILS_WR)) continue;
 
-        g_lastWriteUs = (uint64_t)esp_timer_get_time();
-        g_writeCount++;
-        applyCoils(g_coils, "master");
+        if (info.type & MB_EVENT_COILS_WR) {
+            g_lastWriteUs = (uint64_t)esp_timer_get_time();
+            g_writeCount++;
+            applyCoils(g_coils, "master");
+        }
+
+        if (info.type & MB_EVENT_HOLDING_REG_WR) {
+            const uint32_t epoch = ((uint32_t)g_timeRegs[0] << 16) | (uint32_t)g_timeRegs[1];
+            // Sanity-gate it rather than trusting the wire. A half-written pair
+            // or a corrupted frame that passed CRC would otherwise throw the
+            // clock to 1970 or 2106, and every timestamp after it.
+            if (epoch > 1700000000u) {
+                struct timeval tv = { .tv_sec = (time_t)epoch, .tv_usec = 0 };
+                settimeofday(&tv, nullptr);
+                g_timeSyncs++;
+                if (!g_timeSet) {
+                    g_timeSet = true;
+                    ESP_LOGI(TAG, "clock set from master: %" PRIu32, epoch);
+                }
+            } else {
+                ESP_LOGW(TAG, "ignoring implausible epoch %" PRIu32 " from master", epoch);
+            }
+        }
     }
 }
 
@@ -333,6 +396,10 @@ uint32_t msSinceLastWrite() {
     return (uint32_t)(((uint64_t)esp_timer_get_time() - g_lastWriteUs) / 1000ULL);
 }
 
+bool     timeSet()    { return g_timeSet; }
+uint32_t timeSyncs()  { return g_timeSyncs; }
+uint32_t lastTripAt() { return (uint32_t)g_lastTripAt; }
+
 int uartTest(int ms) {
     if (ms < 100)   ms = 100;
     if (ms > 30000) ms = 30000;
@@ -382,6 +449,14 @@ extern "C" void app_main(void) {
     settings.log();
     g_failsafeMs = (uint32_t)settings.failsafeMs;
     settings.onChange("failsafe_ms", [] { g_failsafeMs = (uint32_t)settings.failsafeMs; });
+
+    // The master sends UTC; this is what makes the log read in local time.
+    setenv("TZ", settings.tz.c_str(), 1);
+    tzset();
+    settings.onChange("tz", [] {
+        setenv("TZ", settings.tz.c_str(), 1);
+        tzset();
+    });
 
     // Modbus and the failsafe come up before Wi-Fi, deliberately. This node's
     // job is to switch four gates on command and to drop them when command is

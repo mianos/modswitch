@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cinttypes>
+#include <ctime>
 #include <string>
 
 #include "esp_app_desc.h"
@@ -46,6 +47,19 @@ esp_err_t send_json(httpd_req_t* req, const JsonWrapper& json) {
     return httpd_resp_sendstr(req, out.c_str());
 }
 
+// Local time, or "unknown" until the master has pushed a clock over RS485.
+// Saying "unknown" matters: this node has no RTC and no network, so the
+// alternative is presenting 1970 as though it were a fact.
+std::string wallTimeString(uint32_t epoch) {
+    if (epoch == 0) return "unknown";
+    const time_t t = (time_t)epoch;
+    struct tm lt;
+    localtime_r(&t, &lt);
+    char buf[32];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S%z", &lt);
+    return std::string(buf);
+}
+
 std::string uptimeString() {
     uint32_t s = (uint32_t)(esp_timer_get_time() / 1000000ULL);
     uint32_t d = s / 86400; s %= 86400;
@@ -59,10 +73,16 @@ std::string uptimeString() {
 MosWebServer::MosWebServer(WebContext* ctx, Settings& settings)
     : WebServer(ctx), settings_(settings) {}
 
+// The shared base already emits a numeric "uptime" and a "time", so this adds
+// the human uptime under its own key and qualifies the base's clock rather than
+// duplicating either. time_set matters here: this node has no RTC and no
+// network, so the base's "time" is 1970 until the master pushes a clock down
+// the RS485 pair, and nothing else would say so.
 void MosWebServer::populate_healthz_fields(WebContext*, JsonWrapper& json) {
-    json.AddItem("uptime",    uptimeString());
+    json.AddItem("up",        uptimeString());
     json.AddItem("heap_free", (int)esp_get_free_heap_size());
     json.AddItem("tripped",   node::tripped());
+    json.AddItem("time_set",  node::timeSet());
 }
 
 esp_err_t MosWebServer::start() {
@@ -230,6 +250,14 @@ esp_err_t MosWebServer::status_get_handler(httpd_req_t* req) {
     resp.AddItem("failsafe_ms",     self->settings_.failsafeMs);
     resp.AddItem("failsafe_trips",  (int)node::tripCount());
     resp.AddItem("tripped",         node::tripped());
+
+    // The clock the master pushes over RS485, and the reason it is worth
+    // having: a trip count with an hour attached to it.
+    resp.AddItem("time",            wallTimeString(node::timeSet()
+                                                   ? (uint32_t)time(nullptr) : 0));
+    resp.AddItem("time_set",        node::timeSet());
+    resp.AddItem("time_syncs",      (int)node::timeSyncs());
+    resp.AddItem("last_trip_at",    wallTimeString(node::lastTripAt()));
     return send_json(req, resp);
 }
 

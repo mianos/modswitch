@@ -24,8 +24,34 @@ recovery path to get wrong.
 |---|---|
 | Unit id | `1` |
 | Serial | 19200 8N1 |
-| Function codes | `0x0F` write multiple coils from coil 0; `0x01` read coils works but the master never uses it |
+| Function codes | `0x0F` write multiple coils from coil 0; `0x10` write holding registers 0–1 for the clock; `0x01` read coils works but the master never uses it |
 | Coils | `0`–`3` → channels 1–4. Coil set ⇒ gate on |
+| Holding regs | `0`–`1` → 32-bit Unix epoch, high word first |
+
+## The clock
+
+This node has no RTC and no network, so without the master it has no idea what
+time it is. Modbus has **no function code for time** — the spec has no notion of
+it — so the master writes a 32-bit Unix epoch into holding registers 0–1 with
+FC 0x10, roughly once a minute. The address is a shared constant on both sides
+(`cfg::kTimeReg` here, `modbusbus::kTimeReg` in mqttcan); a mismatch would be a
+silent no-op.
+
+The point is not tidy log lines. It is that **`failsafe_trips` becomes "the link
+dropped at 14:49:30"** instead of a bare number you cannot place in a ride.
+
+Incoming epochs are sanity-gated rather than trusted: a half-written pair or a
+corrupt frame that happened to pass CRC would otherwise throw the clock to 1970
+or 2106 and every timestamp after it. Until a plausible one arrives, `/status`
+reports `"unknown"` rather than presenting 1970 as a fact.
+
+**A clock write does not feed the failsafe.** Only a coil write does. The
+watchdog measures how fresh the *lamp command* is, and a clock update is not a
+lamp command — a master that somehow kept sending the time while no longer
+driving the coils must still trip it.
+
+`tz` (default `AEST-10AEDT,M10.1.0,M4.1.0/3`, matching mqttcan) is what turns
+the UTC epoch into a local timestamp for reporting.
 
 ## The failsafe
 
@@ -114,7 +140,7 @@ reconnects.
 | `POST /firmware` | OTA — raw `.bin` body, reboots into it |
 | `GET /firmware` | running version / partition / `ota_state` — **check this is `valid` after an OTA before powering down** |
 | `GET`/`POST /config` | settings, NVS-backed |
-| `GET /status` | channel states, coil image, write count, failsafe trips |
+| `GET /status` | channel states, coil image, write count, failsafe trips, clock and `last_trip_at` |
 | `POST /output` | `{"channel":0,"set":"on"\|"off"\|"toggle"}` |
 | `POST /uart_test` | transmit on RS485 so the module's TX LED lights — bring-up only |
 | `GET /healthz`, `POST /reset`, `POST /set_hostname` | shared `WebServer` base |
