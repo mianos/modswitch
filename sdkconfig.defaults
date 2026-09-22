@@ -1,0 +1,24 @@
+# Target — classic ESP32 (ESP32-D0WD-V3) on an "ESP MOS X4" 4-channel MOSFET
+# board, 4MB flash, no PSRAM.
+CONFIG_IDF_TARGET="esp32"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# Dual-OTA, so the board is flashed over serial once and updated over Wi-Fi
+# thereafter. See partitions.csv for why that matters on this hardware.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Roll back automatically if a new image cannot confirm itself. main.cpp marks
+# the image valid once it has an IP; without that it reverts to the previous
+# one, which is the only recovery path that does not need the serial jumper.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# Modbus RTU only; ASCII and TCP are dead weight here.
+CONFIG_FMB_COMM_MODE_RTU_EN=y
+CONFIG_FMB_COMM_MODE_ASCII_EN=n
+CONFIG_FMB_COMM_MODE_TCP_EN=n
+
+# The failsafe must survive a wedged task, and a reboot parks every gate off,
+# which is the safe state.
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_PANIC=y
