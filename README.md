@@ -112,7 +112,7 @@ reconnects.
 | | |
 |---|---|
 | `POST /firmware` | OTA — raw `.bin` body, reboots into it |
-| `GET /firmware` | running version / partition |
+| `GET /firmware` | running version / partition / `ota_state` — **check this is `valid` after an OTA before powering down** |
 | `GET`/`POST /config` | settings, NVS-backed |
 | `GET /status` | channel states, coil image, write count, failsafe trips |
 | `POST /output` | `{"channel":0,"set":"on"\|"off"\|"toggle"}` |
