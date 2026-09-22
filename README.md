@@ -54,6 +54,23 @@ actively setting outputs is a controller. A channel set that way holds for
 call is a pulse, not a latch. For a long bench test, repeat the call or raise
 `failsafe_ms` first.
 
+## Verified end to end
+
+Against the real mqttcan master over RS485, 2026-09-22:
+
+| | |
+|---|---|
+| Link | `modbus_link: up`, `modbus_ok: 60`, `modbus_err: 0` |
+| Write counts | 60 at the master, 60 at the node — nothing dropped |
+| Echo | none. `modbus_err` stayed 0, so the auto-direction transceiver is not feeding its own transmissions back |
+| Gesture | a triple click injected on the CAN bus lit both lamps; a single click turned them off |
+| Failsafe | master stopped with the lamps on → still on at t+3s and t+6s, **off at t+9s** against an 8000ms timeout |
+| Recovery | master restarted → lamps restored on the next heartbeat, no resync, `tripped` back to false |
+
+That last row is the "state, not events" design paying for itself: the node
+converged on the correct state with no handshake and no recovery path, because
+there is nothing to recover.
+
 ## Pins
 
 | Function | GPIO |
