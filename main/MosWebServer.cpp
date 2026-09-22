@@ -258,6 +258,11 @@ esp_err_t MosWebServer::status_get_handler(httpd_req_t* req) {
     resp.AddItem("time_set",        node::timeSet());
     resp.AddItem("time_syncs",      (int)node::timeSyncs());
     resp.AddItem("last_trip_at",    wallTimeString(node::lastTripAt()));
+
+    // Power-related, so a current measurement can be matched to what the board
+    // was actually running at rather than to what the source says today.
+    resp.AddItem("cpu_mhz",         CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
+    resp.AddItem("wifi_ps",         self->settings_.wifiPs);
     return send_json(req, resp);
 }
 

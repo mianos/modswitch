@@ -13,6 +13,17 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 # one, which is the only recovery path that does not need the serial jumper.
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 
+# 80MHz, down from the 160MHz default. This node lives on the bike's battery,
+# so every milliamp it draws parked is charge that is not there on Monday, and
+# its actual workload is four GPIOs, a 19200-baud Modbus slave and a 100ms
+# timer — none of which notices the difference.
+#
+# Safe for the UART specifically: on the ESP32 the APB bus stays at 80MHz for
+# any PLL-derived CPU frequency (80/160/240), so the Modbus baud divider is
+# unchanged. Only dropping to the XTAL frequencies would move APB, and that is
+# what would break RTU's inter-character timing.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y
+
 # Modbus RTU only; ASCII and TCP are dead weight here.
 CONFIG_FMB_COMM_MODE_RTU_EN=y
 CONFIG_FMB_COMM_MODE_ASCII_EN=n

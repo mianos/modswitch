@@ -40,11 +40,30 @@ struct Settings : SettingsBase {
     // read the same.
     std::string tz = "AEST-10AEDT,M10.1.0,M4.1.0/3";
 
+    // Wi-Fi power save: "max" | "min" | "none". Applies live.
+    //
+    // This node sits on the bike's battery, and the radio is the largest thing
+    // it does that it almost never needs — its only network job is an
+    // occasional OTA. "max" sleeps through several DTIM beacons instead of
+    // waking for each, which is the cheapest real saving available without
+    // touching the Modbus path.
+    //
+    // The cost is latency: HTTP replies get slower and a ~1MB OTA can take
+    // noticeably longer. If that becomes a nuisance, POST {"wifi_ps":"min"}
+    // before the upload and put it back after. It is a setting rather than a
+    // compile-time choice precisely so recovering from that does not need the
+    // IO0 jumper.
+    //
+    // "none" keeps the radio awake permanently, which is what mqttcan does
+    // because it is a reporter on switched power. Wrong trade here.
+    std::string wifiPs = "max";
+
     explicit Settings(NvsStorageManager& nvs) : SettingsBase(nvs) {
         field("sensor_name",  sensorName);
         field("wifi_country", wifiCountry);
         field("failsafe_ms",  failsafeMs);
         field("tz",           tz);
+        field("wifi_ps",      wifiPs);
         load();
     }
 };

@@ -39,6 +39,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <string>
 #include <sys/time.h>
 
 #include "driver/gpio.h"
@@ -230,6 +231,20 @@ void failsafeTask(void*) {
         ESP_LOGE(TAG, "no coil write for %" PRIu32 "ms - all channels off (trip %" PRIu32 ")",
                  g_failsafeMs, g_tripCount);
     }
+}
+
+// Wi-Fi power save. Applied after the stack is up, and again on every settings
+// change so the radio can be woken for an OTA and put back afterwards without
+// a reflash — which matters on a board whose serial recovery needs a jumper.
+void applyWifiPs(const std::string& mode) {
+    wifi_ps_type_t ps = WIFI_PS_MAX_MODEM;
+    if      (mode == "none") ps = WIFI_PS_NONE;
+    else if (mode == "min")  ps = WIFI_PS_MIN_MODEM;
+    else if (mode != "max") {
+        ESP_LOGW(TAG, "wifi_ps '%s' unknown, using max", mode.c_str());
+    }
+    const esp_err_t err = esp_wifi_set_ps(ps);
+    ESP_LOGI(TAG, "wifi power save '%s': %s", mode.c_str(), esp_err_to_name(err));
 }
 
 esp_err_t modbusStart() {
@@ -498,6 +513,9 @@ extern "C" void app_main(void) {
     // Must be set after the Wi-Fi stack is up.
     esp_err_t cr = esp_wifi_set_country_code(settings.wifiCountry.c_str(), true);
     ESP_LOGI(TAG, "wifi country '%s': %s", settings.wifiCountry.c_str(), esp_err_to_name(cr));
+
+    applyWifiPs(settings.wifiPs);
+    settings.onChange("wifi_ps", [] { applyWifiPs(settings.wifiPs); });
 
     static WebContext webctx(&wifi);
     static MosWebServer web(&webctx, settings);
