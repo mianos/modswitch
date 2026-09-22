@@ -130,6 +130,56 @@ parks each pin at its inactive level before enabling the pad and sets a matching
 internal pull, but nothing in software can cover the window before software
 runs.
 
+## Power, and the low-side consequence
+
+**The FETs switch low-side** — confirmed by inspecting the board, not by
+datasheet inference. The FET sits between the load and ground: load positive
+comes from V+, load negative goes to the output terminal, and the FET pulls it
+down. Three things follow.
+
+**The load's positive is always live.** Switching happens on the return path, so
+a lamp is at supply potential even when "off". Any short from the *negative*
+wire to the frame turns that channel on and nothing in software can turn it off
+again — and that wire runs the length of the bike to the headlight. Route and
+protect it accordingly.
+
+**A separately-grounded load cannot be switched at all.** If a lamp's negative
+is bonded to its own metal body and the body to its bracket, it finds a ground
+path around the FET and stays lit. Check continuity from lamp negative to lamp
+body before mounting anything.
+
+**All load current returns through the board's GND.** The FET sources tie to
+the ground plane, so every channel's current leaves via the GND terminal. That
+wire goes to the battery negative and is sized for the *total* lamp current,
+never to a convenient thin chassis point.
+
+### Keeping the ESP off constant power
+
+Measured idle draw is **12 mA at 12 V** (80 MHz, `wifi_ps` max — see Settings).
+That is about 2 Ah a week, so a board left on constant 12 V will flatten a
+14 Ah battery in roughly three weeks. Firmware has taken this about as far as
+it goes; the rest is wiring.
+
+Because the switching is low-side, the lamp supply and the board supply do not
+have to be the same thing. Two ways to separate them:
+
+- **A relay, no board modification.** Battery → fuse → relay contacts → the
+  board's normal DC input, relay coil on switched ignition. Lamps draw through
+  the board's V+ track exactly as designed, and at ignition-off the whole thing
+  is dead: no drain, no live lamp positive, and a failed-short FET is harmless
+  while parked. The master is on switched power anyway, so this node has
+  nothing to do with the key out.
+- **Cut the V+ track** between the DC input and the output terminals' V+ pins,
+  feed the board from switched 12 V and inject battery 12 V at an output V+
+  pin. Electrically sound — that track is already rated for full load current,
+  since it carries it in normal use — but it leaves the lamp positive
+  permanently live, so the chafe risk above applies whenever the bike is
+  parked. Check what else the track feeds (flyback diodes, TVS, any voltage
+  sense) before cutting, and strain-relieve whatever replaces it.
+
+Either way: fuse at the battery, sized for the lamps, and the heavy ground
+above.
+
 ## HTTP
 
 Wi-Fi is ESP-Touch v2 on first boot (`WiFiManager: Not provisioned`), then
