@@ -116,7 +116,15 @@ reconnects.
 | `GET`/`POST /config` | settings, NVS-backed |
 | `GET /status` | channel states, coil image, write count, failsafe trips |
 | `POST /output` | `{"channel":0,"set":"on"\|"off"\|"toggle"}` |
+| `POST /uart_test` | transmit on RS485 so the module's TX LED lights — bring-up only |
 | `GET /healthz`, `POST /reset`, `POST /set_hostname` | shared `WebServer` base |
+
+`POST /uart_test` **returns 409 while a master is driving the bus.** It puts raw
+bytes on the shared pair for seconds at a time, which collides with every Modbus
+transaction for the duration and trips the failsafe — on a moving vehicle, that
+is the lights going out. It was written when reaching it meant a serial cable;
+over Wi-Fi it needs to refuse by itself. Add `"force":true` to override, and the
+node is considered idle once nothing has written a coil for `failsafe_ms`.
 
 ```sh
 curl -s http://mosnode.local/status | jq
@@ -157,12 +165,18 @@ port stops mattering, and on this hardware that is worth real effort to avoid:
 - Recovery is a jumper from **IO0 to GND** plus a power cycle.
 
 OTA rollback is armed (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE`). A new image
-marks itself valid only once it has an IP; otherwise the bootloader reverts to
-the previous one. Connectivity is the right health check even though the real
-job is Modbus, because an image that cannot reach the network cannot be replaced
-except with that jumper. Pending-verify only happens straight after an OTA,
-which by definition happened somewhere with Wi-Fi, so this cannot strand a node
-that is simply out riding.
+marks itself valid once it has an IP. Connectivity is the right health check
+even though the real job is Modbus, because an image that cannot reach the
+network cannot be replaced except with that jumper.
+
+**That wait has no deadline, deliberately.** The bootloader already covers both
+real failure modes: an image that crashes never reaches the check and is rolled
+back on the next boot, and one that runs but cannot join Wi-Fi stays
+unconfirmed and is rolled back at the next power cycle. A timeout on top of
+that adds exactly one behaviour — rebooting a node that is working fine,
+mid-ride, because it happens to be out of range. On a node holding the driving
+lights on, that is the lamps going dark for the two seconds it takes to get
+back to the coil task. Nothing is worth that.
 
 **Serial gotcha that cost an hour:** an `idf.py monitor` left open on
 `/dev/tty.usbserial-*` locks the same device as `/dev/cu.usbserial-*`, and both
