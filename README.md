@@ -47,10 +47,12 @@ The failsafe clears the coil image too, not just the gates, so what the node
 *reports* and what it is *doing* never disagree. The master's next heartbeat
 restores the true state anyway.
 
-Note that `POST /output` **feeds** the watchdog. It guards against losing *all*
-control, not Modbus specifically — an HTTP client actively setting outputs is a
-controller, and having the lights cut out from under it five seconds later would
-be astonishing rather than safe.
+`POST /output` **feeds** the watchdog but is not exempt from it: the watchdog
+guards against losing *all* control, not Modbus specifically, and an HTTP client
+actively setting outputs is a controller. A channel set that way holds for
+`failsafe_ms` from the last command and is then dropped like any other, so one
+call is a pulse, not a latch. For a long bench test, repeat the call or raise
+`failsafe_ms` first.
 
 ## Pins
 

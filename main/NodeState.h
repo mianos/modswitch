@@ -16,11 +16,18 @@ bool channelState(int ch);
 // Drive one channel by hand, for bench work and for checking which physical
 // output is which without a master on the bus.
 //
-// This also feeds the comms watchdog, and that is deliberate: the watchdog
-// guards against losing *all* control, not against losing Modbus specifically.
-// An HTTP client that is actively setting outputs is a controller, and having
-// the failsafe cut the lights out from under it five seconds later would be
-// astonishing rather than safe. Returns false for an out-of-range channel.
+// This feeds the comms watchdog, deliberately: the watchdog guards against
+// losing *all* control, not against losing Modbus specifically, and an HTTP
+// client actively setting outputs is a controller.
+//
+// It feeds it, it does not exempt from it. A channel set here holds for
+// failsafe_ms from the *last* command and is then dropped like any other, so a
+// single call is a pulse rather than a latch. That is the point of a dead-man's
+// switch — a curl command that scrolled off someone's terminal is not evidence
+// that anybody still wants the lights on. To hold a channel for a long bench
+// test, repeat the call, or raise failsafe_ms first.
+//
+// Returns false for an out-of-range channel.
 bool setChannel(int ch, bool on);
 
 // How many coil writes have been accepted from the master since boot, and how
