@@ -1,4 +1,4 @@
-#include "MosWebServer.h"
+#include "SwitchWebServer.h"
 
 #include <algorithm>
 #include <array>
@@ -20,7 +20,7 @@
 
 namespace {
 
-constexpr const char* TAG = "mosweb";
+constexpr const char* TAG = "switchweb";
 
 // /config and /output bodies are tiny. Bound the input so a hostile
 // Content-Length cannot trigger a huge std::string allocation; /firmware has
@@ -70,7 +70,7 @@ std::string uptimeString() {
 
 }  // namespace
 
-MosWebServer::MosWebServer(WebContext* ctx, Settings& settings)
+SwitchWebServer::SwitchWebServer(WebContext* ctx, Settings& settings)
     : WebServer(ctx), settings_(settings) {}
 
 // The shared base already emits a numeric "uptime" and a "time", so this adds
@@ -78,14 +78,14 @@ MosWebServer::MosWebServer(WebContext* ctx, Settings& settings)
 // duplicating either. time_set matters here: this node has no RTC and no
 // network, so the base's "time" is 1970 until the master pushes a clock down
 // the RS485 pair, and nothing else would say so.
-void MosWebServer::populate_healthz_fields(WebContext*, JsonWrapper& json) {
+void SwitchWebServer::populate_healthz_fields(WebContext*, JsonWrapper& json) {
     json.AddItem("up",        uptimeString());
     json.AddItem("heap_free", (int)esp_get_free_heap_size());
     json.AddItem("tripped",   node::tripped());
     json.AddItem("time_set",  node::timeSet());
 }
 
-esp_err_t MosWebServer::start() {
+esp_err_t SwitchWebServer::start() {
     esp_err_t err = WebServer::start();
     if (err != ESP_OK) return err;
 
@@ -122,7 +122,7 @@ esp_err_t MosWebServer::start() {
 // The image comes up pending-verify; main.cpp confirms it once it has an IP,
 // and the bootloader rolls back to this image if it never does. That rollback
 // is the whole safety net for a board whose serial recovery needs a jumper.
-esp_err_t MosWebServer::firmware_post_handler(httpd_req_t* req) {
+esp_err_t SwitchWebServer::firmware_post_handler(httpd_req_t* req) {
     if (req->content_len <= 0) return sendJsonError(req, 400, "Content-Length required");
 
     const esp_partition_t* target = esp_ota_get_next_update_partition(nullptr);
@@ -191,7 +191,7 @@ static const char* otaStateName(const esp_partition_t* running) {
     return "unknown";
 }
 
-esp_err_t MosWebServer::firmware_get_handler(httpd_req_t* req) {
+esp_err_t SwitchWebServer::firmware_get_handler(httpd_req_t* req) {
     const esp_app_desc_t*  desc    = esp_app_get_description();
     const esp_partition_t* running = esp_ota_get_running_partition();
     JsonWrapper resp;
@@ -204,14 +204,14 @@ esp_err_t MosWebServer::firmware_get_handler(httpd_req_t* req) {
     return send_json(req, resp);
 }
 
-esp_err_t MosWebServer::config_get_handler(httpd_req_t* req) {
-    auto* self = static_cast<MosWebServer*>(req->user_ctx);
+esp_err_t SwitchWebServer::config_get_handler(httpd_req_t* req) {
+    auto* self = static_cast<SwitchWebServer*>(req->user_ctx);
     JsonWrapper resp = self->settings_.toJson();
     return send_json(req, resp);
 }
 
-esp_err_t MosWebServer::config_post_handler(httpd_req_t* req) {
-    auto* self = static_cast<MosWebServer*>(req->user_ctx);
+esp_err_t SwitchWebServer::config_post_handler(httpd_req_t* req) {
+    auto* self = static_cast<SwitchWebServer*>(req->user_ctx);
     if (req->content_len > (int)kMaxJsonBodyBytes) {
         return sendJsonError(req, 413, "request body too large");
     }
@@ -232,8 +232,8 @@ esp_err_t MosWebServer::config_post_handler(httpd_req_t* req) {
 //
 // ch<N> is flattened one key per channel rather than an array because
 // JsonWrapper has no nested containers.
-esp_err_t MosWebServer::status_get_handler(httpd_req_t* req) {
-    auto* self = static_cast<MosWebServer*>(req->user_ctx);
+esp_err_t SwitchWebServer::status_get_handler(httpd_req_t* req) {
+    auto* self = static_cast<SwitchWebServer*>(req->user_ctx);
     JsonWrapper resp;
     resp.AddItem("uptime",     uptimeString());
     resp.AddItem("heap_free",  (int)esp_get_free_heap_size());
@@ -271,7 +271,7 @@ esp_err_t MosWebServer::status_get_handler(httpd_req_t* req) {
 // For bench work and for identifying which physical output is which. Note this
 // feeds the comms watchdog (see NodeState.h), so a channel set here stays set;
 // it is not quietly undone five seconds later.
-esp_err_t MosWebServer::output_post_handler(httpd_req_t* req) {
+esp_err_t SwitchWebServer::output_post_handler(httpd_req_t* req) {
     if (req->content_len > (int)kMaxJsonBodyBytes) {
         return sendJsonError(req, 413, "request body too large");
     }
@@ -316,8 +316,8 @@ esp_err_t MosWebServer::output_post_handler(httpd_req_t* req) {
 // vehicle, that is the driving lights going out. It was written as a bench tool
 // back when reaching it meant a serial cable; it is now one curl away over
 // Wi-Fi, so it needs to say no by itself.
-esp_err_t MosWebServer::uart_test_post_handler(httpd_req_t* req) {
-    auto* self = static_cast<MosWebServer*>(req->user_ctx);
+esp_err_t SwitchWebServer::uart_test_post_handler(httpd_req_t* req) {
+    auto* self = static_cast<SwitchWebServer*>(req->user_ctx);
 
     int  ms    = 3000;
     bool force = false;

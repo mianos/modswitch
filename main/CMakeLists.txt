@@ -1,7 +1,7 @@
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-idf_component_register(SRCS "main.cpp" "MosWebServer.cpp"
+idf_component_register(SRCS "main.cpp" "SwitchWebServer.cpp"
                        INCLUDE_DIRS "."
                        REQUIRES
                          espressif__esp-modbus

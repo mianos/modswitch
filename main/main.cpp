@@ -1,10 +1,12 @@
-// mosnode — a generic Modbus RTU to MOSFET node.
+// modswitch — a generic Modbus RTU switch node.
 //
-// Listens on RS485 as a Modbus slave and drives N MOSFET channels from N
-// coils. Built as the front-of-bike half of mqttcan: that board watches a BMW
+// Listens on RS485 as a Modbus slave and drives N output channels from N
+// coils. The outputs are whatever the board has: the first build was a
+// MOSFET board (ESP MOS X4), the next is relays, and nothing above Config.h
+// cares which. Built as the front-of-bike half of mqttcan: that board watches a BMW
 // R1200GS's CAN bus, counts a triple click of the high beam, and writes the
 // coils here; this one switches the auxiliary driving lights. Nothing in it is
-// specific to that, though — it is coils to gates, and the pin map is one
+// specific to that, though — it is coils to outputs, and the pin map is one
 // header away in Config.h.
 //
 // It has Wi-Fi, an HTTP surface and OTA, added because this board's USB-serial
@@ -12,7 +14,7 @@
 // power cycle. All of it is management only, started last and after the
 // actuator, and none of it is in the path that drives a gate.
 //
-// It deliberately has NO MQTT. It sits inside a headlight shell and is out of
+// It deliberately has NO MQTT. It is mounted on the bike and is out of
 // broker range for almost every minute it is powered, so a client there would
 // be a blocking network dependency next to the actuator in exchange for
 // telemetry that almost never arrives. Everything it has to say fits in GET
@@ -62,13 +64,13 @@
 #include "WifiManager.h"
 
 #include "Config.h"
-#include "MosWebServer.h"
+#include "SwitchWebServer.h"
 #include "NodeState.h"
 #include "Settings.h"
 
 namespace {
 
-constexpr const char* TAG = "mosnode";
+constexpr const char* TAG = "modswitch";
 
 void* g_slave = nullptr;
 
@@ -186,7 +188,7 @@ void applyCoils(uint8_t bits, const char* why) {
     if (changed) ESP_LOGI(TAG, "channels %s (%s)", s, why);
 }
 
-#if MOSNODE_WALK_ON_BOOT
+#if MODSWITCH_WALK_ON_BOOT
 // Identify which physical output is which coil, for a board whose pinout is in
 // doubt. Coil 0 first, one second each.
 void walkChannels() {
@@ -455,7 +457,7 @@ int uartTest(int ms) {
 extern "C" void app_main(void) {
     esp_log_level_set("*", ESP_LOG_WARN);
     esp_log_level_set(TAG, ESP_LOG_INFO);
-    esp_log_level_set("mosweb", ESP_LOG_INFO);
+    esp_log_level_set("switchweb", ESP_LOG_INFO);
     esp_log_level_set("WiFiManager", ESP_LOG_INFO);
     esp_log_level_set("esp_netif_handlers", ESP_LOG_INFO);   // prints "sta ip: ..."
     esp_log_level_set("settings", ESP_LOG_INFO);
@@ -464,7 +466,7 @@ extern "C" void app_main(void) {
     // happens to the bus or the network afterwards.
     initChannels();
 
-#if MOSNODE_WALK_ON_BOOT
+#if MODSWITCH_WALK_ON_BOOT
     walkChannels();
 #endif
 
@@ -518,10 +520,10 @@ extern "C" void app_main(void) {
     settings.onChange("wifi_ps", [] { applyWifiPs(settings.wifiPs); });
 
     static WebContext webctx(&wifi);
-    static MosWebServer web(&webctx, settings);
+    static SwitchWebServer web(&webctx, settings);
     web.start();
 
     xTaskCreate(otaVerifyTask, "ota_verify", 4096, nullptr, 4, nullptr);
 
-    ESP_LOGI(TAG, "mosnode started");
+    ESP_LOGI(TAG, "modswitch started");
 }

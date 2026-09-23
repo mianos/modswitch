@@ -2,7 +2,7 @@
 
 #include "SettingsBase.h"
 
-// mosnode settings — persistence, reset and logging live in mianesp's
+// modswitch settings — persistence, reset and logging live in mianesp's
 // settingsbase, the same store mqttcan uses. Member initialisers are the
 // compiled-in defaults; missing or unparseable NVS config falls back to them.
 //
@@ -13,7 +13,7 @@
 // could energise a driving light at 70km/h with no way to undo it remotely.
 // Timing is safe to tune at runtime; wiring is not.
 struct Settings : SettingsBase {
-    std::string sensorName = "mosnode";
+    std::string sensorName = "modswitch";
 
     // Wi-Fi regulatory domain. ESP-IDF defaults to "01" (worldwide), which
     // permits only channels 1-11, so an AP on channel 12 or 13 is invisible

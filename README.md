@@ -1,15 +1,19 @@
-# mosnode
+# modswitch
 
-A generic **Modbus RTU → MOSFET node** on a classic ESP32. It listens on RS485
-as a Modbus slave and drives N MOSFET channels from N coils.
+A generic **Modbus RTU switch node** on a classic ESP32. It listens on RS485
+as a Modbus slave and drives N output channels from N coils — MOSFETs or
+relays, whichever the board has; nothing above `main/Config.h` cares which.
+
+(Formerly `mosnode`, renamed when the design moved from a MOSFET board to
+relays.)
 
 Built as the front-of-bike half of [mqttcan](../mqttcan): that board watches a
 BMW R1200GS's CAN bus, counts a triple click of the high beam, and writes the
 coils here; this one switches the auxiliary driving lights. Nothing about it is
-specific to that — it is coils to gates, and the pin map is one header away in
+specific to that — it is coils to outputs, and the pin map is one header away in
 `main/Config.h`.
 
-Hardware: **"ESP MOS X4"**, DC 5–60 V, ESP32-D0WD-V3 (rev 3.1), 4 MB flash, no
+First hardware: **"ESP MOS X4"**, DC 5–60 V, ESP32-D0WD-V3 (rev 3.1), 4 MB flash, no
 PSRAM, four MOSFET channels. ESP-IDF v6.0.1.
 
 ## The protocol
@@ -114,7 +118,7 @@ table, and its template JSON agrees. (An earlier version of this README said
 the JSON decoded to 12/13/22/23. That was a misreading: Tasmota's ESP32
 template array is not indexed by GPIO number — its slots run
 `0,1,2,3,4,5,9,10,12,13,…,27,6,7,8,11,32…39` — so slots 12/13/22/23 are
-GPIO16/17/26/27.) On an unfamiliar board, `MOSNODE_WALK_ON_BOOT 1` switches
+GPIO16/17/26/27.) On an unfamiliar board, `MODSWITCH_WALK_ON_BOOT 1` switches
 each channel on for a second in turn so you can see which output is coil 0
 without tracing the PCB.
 
@@ -203,10 +207,10 @@ over Wi-Fi it needs to refuse by itself. Add `"force":true` to override, and the
 node is considered idle once nothing has written a coil for `failsafe_ms`.
 
 ```sh
-curl -s http://mosnode.local/status | jq
-curl -X POST -d '{"channel":0,"set":"on"}' http://mosnode.local/output
-curl -X POST --data-binary @build/mosnode.bin http://mosnode.local/firmware
-curl -X POST -d '{"failsafe_ms":8000}' http://mosnode.local/config
+curl -s http://modswitch.local/status | jq
+curl -X POST -d '{"channel":0,"set":"on"}' http://modswitch.local/output
+curl -X POST --data-binary @build/modswitch.bin http://modswitch.local/firmware
+curl -X POST -d '{"failsafe_ms":8000}' http://modswitch.local/config
 ```
 
 `POST /reset` clears Wi-Fi credentials and reboots into provisioning. It is not

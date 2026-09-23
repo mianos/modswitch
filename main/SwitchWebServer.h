@@ -8,7 +8,7 @@
 
 struct Settings;
 
-// mosnode's HTTP control surface, layered on the shared WebServer base
+// modswitch's HTTP control surface, layered on the shared WebServer base
 // (/healthz, /reset, /set_hostname). Adds:
 //   POST /firmware   raw .bin body -> inactive OTA slot -> reboot
 //   GET  /firmware   running image version / partition
@@ -24,9 +24,9 @@ struct Settings;
 // never needed again.
 //
 // Handlers recover this instance from req->user_ctx.
-class MosWebServer : public WebServer {
+class SwitchWebServer : public WebServer {
 public:
-    MosWebServer(WebContext* ctx, Settings& settings);
+    SwitchWebServer(WebContext* ctx, Settings& settings);
 
     esp_err_t start() override;
 

@@ -24,7 +24,7 @@ namespace cfg {
 // 0,1,2,3,4,5,9,10,12,13,...,27,6,7,8,11,32..39 -- so array slots
 // 12/13/22/23 are GPIO16/17/26/27, exactly what the table says. Relevant
 // beyond this board: any blakadder template must be decoded with that order.
-// MOSNODE_WALK_ON_BOOT below still settles a pinout against the hardware.
+// MODSWITCH_WALK_ON_BOOT below still settles a pinout against the hardware.
 //
 // Do not use GPIO 34-39: they are input-only on the classic ESP32 and cannot
 // drive a gate. Avoid 6-11 (SPI flash) and, for an output, the strapping pins
@@ -114,6 +114,6 @@ constexpr uint32_t kCommsTimeoutMs = 5000;
 //
 // Leave it 0 in service. On a vehicle it would flash the driving lights every
 // time the ignition was switched on.
-#define MOSNODE_WALK_ON_BOOT 0
+#define MODSWITCH_WALK_ON_BOOT 0
 
 }  // namespace cfg
