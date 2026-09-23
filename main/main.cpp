@@ -1,18 +1,16 @@
 // modswitch — a generic Modbus RTU switch node.
 //
-// Listens on RS485 as a Modbus slave and drives N output channels from N
-// coils. The outputs are whatever the board has: the first build was a
-// MOSFET board (ESP MOS X4), the next is relays, and nothing above Config.h
-// cares which. Built as the front-of-bike half of mqttcan: that board watches a BMW
+// Listens on RS485 as a Modbus slave and drives N relay channels from N
+// coils. Built as the front-of-bike half of mqttcan: that board watches a BMW
 // R1200GS's CAN bus, counts a triple click of the high beam, and writes the
 // coils here; this one switches the auxiliary driving lights. Nothing in it is
 // specific to that, though — it is coils to outputs, and the pin map is one
 // header away in Config.h.
 //
-// It has Wi-Fi, an HTTP surface and OTA, added because this board's USB-serial
-// adapter has no DTR to IO0 and a wired reflash therefore means a jumper and a
-// power cycle. All of it is management only, started last and after the
-// actuator, and none of it is in the path that drives a gate.
+// It has Wi-Fi, an HTTP surface and OTA so it can be updated where it is
+// mounted rather than on the bench. All of it is management only, started
+// last and after the actuator, and none of it is in the path that drives an
+// output.
 //
 // It deliberately has NO MQTT. It is mounted on the bike and is out of
 // broker range for almost every minute it is powered, so a client there would
@@ -21,13 +19,13 @@
 // /status, and if that state is ever wanted on a broker the master is the
 // place to do it: it already has a client, already talks to this node every
 // second, and can read it back over Modbus without this end growing a second
-// network stack. Its entire job is to make four pins follow four bits.
+// network stack. Its entire job is to make its pins follow its coils.
 //
 // Wiring:
 //   RS485 module DI <- GPIO32, RO -> GPIO33, DE+/RE <- GPIO25 (tie DE and /RE)
 //   A/B to the master's pair; 120R termination at both ends of the run
-//   Gates are GPIO16/17/26/27 on the ESP MOS X4 — see Config.h, which also
-//   records why those three UART pins and not the obvious ones
+//   Output pins are in Config.h, which also records why those three UART
+//   pins and not the obvious ones
 //
 // The protocol is state, not events: the master writes every coil's desired
 // value roughly once a second whether or not anything changed. So this node
@@ -124,7 +122,7 @@ uint32_t g_failsafeMs = 5000;
 // without spamming a line per heartbeat.
 bool g_applied[cfg::kChannelCount] = {};
 
-// Serialises applyCoils. Three unrelated contexts drive the gates — the coil
+// Serialises applyCoils. Three unrelated contexts drive the outputs — the coil
 // task, the failsafe, and an HTTP POST /output — and without this two of them
 // can interleave inside the compare-drive-record sequence below and leave a pin
 // disagreeing with what the node reports.
@@ -139,12 +137,11 @@ void driveChannel(int i, bool on) {
     gpio_set_level(cfg::kChannels[i], (on != cfg::kActiveLow) ? 1 : 0);
 }
 
-// Park every gate at its inactive level *before* the pad becomes an output, so
-// enabling the driver cannot produce a brief pulse on the load. The internal
-// pull matches, which also holds the line through reset — though the real fix
-// for that window is a physical pull-down at the gate, because the pin floats
-// from power-on until this function runs and a floating gate on a logic-level
-// MOSFET will happily conduct.
+// Park every output at its inactive level *before* the pad becomes an output,
+// so enabling the driver cannot produce a brief pulse on the load. The
+// internal pull matches, which also holds the line through reset — though the
+// real fix for that window is a physical pull-down on the relay driver's
+// input, because the pin floats from power-on until this function runs.
 void initChannels() {
     g_applyLock = xSemaphoreCreateMutex();
     for (int i = 0; i < cfg::kChannelCount; ++i) {
@@ -165,7 +162,7 @@ void initChannels() {
              cfg::kChannelCount, cfg::kActiveLow ? "low" : "high");
 }
 
-// Push the coil bits onto the gates. Logged only when something moves.
+// Push the coil bits onto the outputs. Logged only when something moves.
 void applyCoils(uint8_t bits, const char* why) {
     bool changed = false;
     char s[cfg::kChannelCount + 1];
@@ -208,7 +205,7 @@ void walkChannels() {
 // than every cycle.
 //
 // It also clears the coil image, not just the pins. If it only dropped the
-// gates, a master that came back and read the coils would be told the lights
+// outputs, a master that came back and read the coils would be told the lights
 // were on while they were dark. Clearing it keeps what this node reports and
 // what it is doing the same thing, and costs nothing: the master writes the
 // true state on its next heartbeat regardless.
@@ -237,7 +234,7 @@ void failsafeTask(void*) {
 
 // Wi-Fi power save. Applied after the stack is up, and again on every settings
 // change so the radio can be woken for an OTA and put back afterwards without
-// a reflash — which matters on a board whose serial recovery needs a jumper.
+// a reflash.
 void applyWifiPs(const std::string& mode) {
     wifi_ps_type_t ps = WIFI_PS_MAX_MODEM;
     if      (mode == "none") ps = WIFI_PS_NONE;
@@ -363,8 +360,8 @@ void coilTask(void*) {
 // Confirms a freshly OTA'd image once it has proved it can reach the network.
 //
 // Connectivity is the right health check even though this node's real job is
-// Modbus, because an image that cannot reach the network cannot be replaced
-// except with a jumper and a power cycle on the bench.
+// Modbus, because an image that cannot reach the network can only be
+// replaced over a serial cable on the bench.
 //
 // There is deliberately no deadline on that wait. The bootloader already covers
 // both real failure modes: an image that crashes never reaches this point and is
@@ -462,7 +459,7 @@ extern "C" void app_main(void) {
     esp_log_level_set("esp_netif_handlers", ESP_LOG_INFO);   // prints "sta ip: ..."
     esp_log_level_set("settings", ESP_LOG_INFO);
 
-    // Gates first, before anything can block: the pins must be parked whatever
+    // Outputs first, before anything can block: the pins must be parked whatever
     // happens to the bus or the network afterwards.
     initChannels();
 
@@ -485,7 +482,7 @@ extern "C" void app_main(void) {
     });
 
     // Modbus and the failsafe come up before Wi-Fi, deliberately. This node's
-    // job is to switch four gates on command and to drop them when command is
+    // job is to switch its outputs on command and to drop them when command is
     // lost; none of that may wait on an access point, a DHCP lease, or a
     // provisioning flow that might never complete.
     if (modbusStart() != ESP_OK) {

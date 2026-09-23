@@ -1,9 +1,7 @@
 # ESP-IDF Partition Table — 4MB flash, dual-OTA layout.
 #
 # The point of this table is that the board only has to be flashed over the
-# wire once. After that every update goes over Wi-Fi via POST /firmware, which
-# matters here more than usual: this board's USB-serial adapter has no DTR to
-# IO0, so entering download mode means a jumper and a power cycle every time.
+# wire once. After that every update goes over Wi-Fi via POST /firmware.
 #
 # nvs keeps its standard offset so Wi-Fi credentials and settings survive an
 # OTA partition swap. otadata takes the slot phy_init normally occupies at

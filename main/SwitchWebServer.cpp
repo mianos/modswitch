@@ -121,7 +121,7 @@ esp_err_t SwitchWebServer::start() {
 //
 // The image comes up pending-verify; main.cpp confirms it once it has an IP,
 // and the bootloader rolls back to this image if it never does. That rollback
-// is the whole safety net for a board whose serial recovery needs a jumper.
+// is the safety net that keeps a bad update from needing a serial cable.
 esp_err_t SwitchWebServer::firmware_post_handler(httpd_req_t* req) {
     if (req->content_len <= 0) return sendJsonError(req, 400, "Content-Length required");
 

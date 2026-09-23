@@ -1,22 +1,20 @@
-# Target — classic ESP32 (ESP32-D0WD-V3) on an "ESP MOS X4" 4-channel MOSFET
-# board, 4MB flash, no PSRAM.
+# Target — classic ESP32 (ESP32-WROOM-32) on an ESP32_Relay_30A_X2 board,
+# 4MB flash, no PSRAM.
 CONFIG_IDF_TARGET="esp32"
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
 # Dual-OTA, so the board is flashed over serial once and updated over Wi-Fi
-# thereafter. See partitions.csv for why that matters on this hardware.
+# thereafter.
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 # Roll back automatically if a new image cannot confirm itself. main.cpp marks
 # the image valid once it has an IP; without that it reverts to the previous
-# one, which is the only recovery path that does not need the serial jumper.
+# one, which is the only recovery path that does not need a serial cable.
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 
-# 80MHz, down from the 160MHz default. This node lives on the bike's battery,
-# so every milliamp it draws parked is charge that is not there on Monday, and
-# its actual workload is four GPIOs, a 19200-baud Modbus slave and a 100ms
-# timer — none of which notices the difference.
+# 80MHz, down from the 160MHz default. The workload is a few GPIOs, a
+# 19200-baud Modbus slave and a 100ms timer, none of which needs more.
 #
 # Safe for the UART specifically: on the ESP32 the APB bus stays at 80MHz for
 # any PLL-derived CPU frequency (80/160/240), so the Modbus baud divider is
@@ -29,7 +27,7 @@ CONFIG_FMB_COMM_MODE_RTU_EN=y
 CONFIG_FMB_COMM_MODE_ASCII_EN=n
 CONFIG_FMB_COMM_MODE_TCP_EN=n
 
-# The failsafe must survive a wedged task, and a reboot parks every gate off,
+# The failsafe must survive a wedged task, and a reboot parks every output off,
 # which is the safe state.
 CONFIG_ESP_TASK_WDT_EN=y
 CONFIG_ESP_TASK_WDT_PANIC=y

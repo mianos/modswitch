@@ -3,7 +3,7 @@
 #include "driver/gpio.h"
 #include "driver/uart.h"
 
-// Everything board-specific lives here, so porting to another MOSFET board is
+// Everything board-specific lives here, so porting to another board is
 // editing one file rather than hunting through main.cpp.
 
 namespace cfg {
@@ -12,23 +12,18 @@ namespace cfg {
 // Outputs
 // ---------------------------------------------------------------------------
 
-// The MOSFET gates, in coil order: coil 0 drives kChannels[0], and so on.
+// The outputs, in coil order: coil 0 drives kChannels[0], and so on.
 //
-// Pins for the "ESP MOS X4", per the blakadder Tasmota template's function
-// table (Relay 1-4 on GPIO 16/17/26/27, link LED on GPIO23):
-//   https://templates.blakadder.com/diynow_ESP32_MOS_X4.html
+// PROVISIONAL. These are not yet confirmed for the ESP32_Relay_30A_X2. The
+// nearest published map, LC Technology's ESP32_Relay_X2 Tasmota template,
+// has two revisions: relays on 16/17, or on 26/25 with the LED on 23 either
+// way. Revision B collides with kPinDe (25) below. Set this once
+// MODSWITCH_WALK_ON_BOOT has identified the board.
+//   https://templates.blakadder.com/ESP32_Relay_X2.html
 //
-// The page's table and its template JSON agree. An earlier note here claimed
-// the JSON decoded to 12/13/22/23; that was a misreading. Tasmota's ESP32
-// template array is NOT indexed by GPIO number -- its positions run
-// 0,1,2,3,4,5,9,10,12,13,...,27,6,7,8,11,32..39 -- so array slots
-// 12/13/22/23 are GPIO16/17/26/27, exactly what the table says. Relevant
-// beyond this board: any blakadder template must be decoded with that order.
-// MODSWITCH_WALK_ON_BOOT below still settles a pinout against the hardware.
-//
-// Do not use GPIO 34-39: they are input-only on the classic ESP32 and cannot
-// drive a gate. Avoid 6-11 (SPI flash) and, for an output, the strapping pins
-// 0/2/5/12/15 — a gate pull-down on a strapping pin can stop the board booting.
+// Do not use GPIO 34-39: they are input-only on the classic ESP32. Avoid 6-11
+// (SPI flash) and, for an output, the strapping pins 0/2/5/12/15 — a pull-down
+// on a strapping pin can stop the board booting.
 constexpr gpio_num_t kChannels[] = {
     GPIO_NUM_16,
     GPIO_NUM_17,
@@ -37,7 +32,7 @@ constexpr gpio_num_t kChannels[] = {
 };
 constexpr int kChannelCount = sizeof(kChannels) / sizeof(kChannels[0]);
 
-// true if the board switches the load when the gate is LOW.
+// true if the board closes a relay when its pin is LOW.
 constexpr bool kActiveLow = false;
 
 // ---------------------------------------------------------------------------
@@ -45,13 +40,12 @@ constexpr bool kActiveLow = false;
 // ---------------------------------------------------------------------------
 
 // UART2, on explicitly assigned pins. Its *defaults* are GPIO16/17, which are
-// MOSFET channels 1 and 2 on this board — left on defaults, Modbus traffic
-// would show up as two flickering outputs.
+// candidate relay pins — left on defaults, Modbus traffic could land on an
+// output.
 //
 // These three avoid:
 //   16/17/26/27  the channels
-//   12/13/22     left clear from when the pinout was (wrongly) in doubt
-//   23           link LED
+//   23           link LED on the candidate relay boards
 //   1/3          UART0, the USB-serial console
 //   6-11         SPI flash
 //   0/2/5/12/15  strapping pins

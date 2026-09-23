@@ -9,7 +9,7 @@
 // SettingsBase stores only std::string and int, so booleans are 0/1 ints.
 //
 // Pin assignments are deliberately NOT here. They are compile-time constants in
-// Config.h, because a settings write that moved a MOSFET gate to the wrong pin
+// Config.h, because a settings write that moved an output to the wrong pin
 // could energise a driving light at 70km/h with no way to undo it remotely.
 // Timing is safe to tune at runtime; wiring is not.
 struct Settings : SettingsBase {
@@ -42,20 +42,10 @@ struct Settings : SettingsBase {
 
     // Wi-Fi power save: "max" | "min" | "none". Applies live.
     //
-    // This node sits on the bike's battery, and the radio is the largest thing
-    // it does that it almost never needs — its only network job is an
-    // occasional OTA. "max" sleeps through several DTIM beacons instead of
-    // waking for each, which is the cheapest real saving available without
-    // touching the Modbus path.
-    //
-    // The cost is latency: HTTP replies get slower and a ~1MB OTA can take
-    // noticeably longer. If that becomes a nuisance, POST {"wifi_ps":"min"}
-    // before the upload and put it back after. It is a setting rather than a
-    // compile-time choice precisely so recovering from that does not need the
-    // IO0 jumper.
-    //
-    // "none" keeps the radio awake permanently, which is what mqttcan does
-    // because it is a reporter on switched power. Wrong trade here.
+    // The radio's only job here is the occasional OTA, so "max" lets it sleep
+    // through several DTIM beacons. The cost is latency: HTTP replies are
+    // slower and a ~1MB OTA takes longer. If that is a nuisance, POST
+    // {"wifi_ps":"min"} before the upload and put it back after.
     std::string wifiPs = "max";
 
     explicit Settings(NvsStorageManager& nvs) : SettingsBase(nvs) {

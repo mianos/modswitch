@@ -18,10 +18,8 @@ struct Settings;
 //   POST /output     drive one channel by hand: {"channel":0,"set":"on"}
 //   POST /uart_test  transmit on RS485 so the module's TX LED lights
 //
-// POST /firmware is the reason this class exists. The board's USB-serial
-// adapter has no DTR to IO0, so a wired reflash means a jumper and a power
-// cycle; once this is running, updates go over Wi-Fi and the serial port is
-// never needed again.
+// POST /firmware is the reason this class exists: once this is running,
+// updates go over Wi-Fi and the serial port is only needed for recovery.
 //
 // Handlers recover this instance from req->user_ctx.
 class SwitchWebServer : public WebServer {

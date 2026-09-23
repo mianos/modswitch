@@ -1,11 +1,8 @@
 # modswitch
 
 A generic **Modbus RTU switch node** on a classic ESP32. It listens on RS485
-as a Modbus slave and drives N output channels from N coils — MOSFETs or
-relays, whichever the board has; nothing above `main/Config.h` cares which.
-
-(Formerly `mosnode`, renamed when the design moved from a MOSFET board to
-relays.)
+as a Modbus slave and drives N relay channels from N coils. (Formerly
+`mosnode`.)
 
 Built as the front-of-bike half of [mqttcan](../mqttcan): that board watches a
 BMW R1200GS's CAN bus, counts a triple click of the high beam, and writes the
@@ -13,8 +10,9 @@ coils here; this one switches the auxiliary driving lights. Nothing about it is
 specific to that — it is coils to outputs, and the pin map is one header away in
 `main/Config.h`.
 
-First hardware: **"ESP MOS X4"**, DC 5–60 V, ESP32-D0WD-V3 (rev 3.1), 4 MB flash, no
-PSRAM, four MOSFET channels. ESP-IDF v6.0.1.
+Target hardware: **ESP32_Relay_30A_X2** — ESP32-WROOM-32, 7–28 V input, two
+SONGLE SLA-05VDC-SL-C relays (20 A as SPDT, 5 V coil), BOOT and RST buttons.
+ESP-IDF v6.0.1.
 
 ## The protocol
 
@@ -29,7 +27,7 @@ recovery path to get wrong.
 | Unit id | `1` |
 | Serial | 19200 8N1 |
 | Function codes | `0x0F` write multiple coils from coil 0; `0x10` write holding registers 0–1 for the clock; `0x01` read coils works but the master never uses it |
-| Coils | `0`–`3` → channels 1–4. Coil set ⇒ gate on |
+| Coils | `0`–`3` → channels 1–4. Coil set ⇒ relay closed |
 | Holding regs | `0`–`1` → 32-bit Unix epoch, high word first |
 
 ## The clock
@@ -73,7 +71,7 @@ cannot be, because it needs the master to be alive to act. This is.
 Keep `failsafe_ms` comfortably above the master's `modbus_period_ms` (1000 ms) or
 ordinary bus noise trips it. The default is five missed heartbeats.
 
-The failsafe clears the coil image too, not just the gates, so what the node
+The failsafe clears the coil image too, not just the outputs, so what the node
 *reports* and what it is *doing* never disagree. The master's next heartbeat
 restores the true state anyway.
 
@@ -105,84 +103,52 @@ there is nothing to recover.
 
 | Function | GPIO |
 |---|---|
-| Channels 1–4 | 16, 17, 26, 27 |
+| Channels | 16, 17, 26, 27 — **provisional**, see below |
 | RS485 TX → transceiver DI | 32 |
 | RS485 RX → transceiver RO | 33 |
 | RS485 DE + /RE (tied) | 25 |
-| Link LED (board) | 23 |
 | Console UART0 | 1, 3 |
 
-The channel pins come from the [blakadder Tasmota
-template](https://templates.blakadder.com/diynow_ESP32_MOS_X4.html)'s function
-table, and its template JSON agrees. (An earlier version of this README said
-the JSON decoded to 12/13/22/23. That was a misreading: Tasmota's ESP32
-template array is not indexed by GPIO number — its slots run
-`0,1,2,3,4,5,9,10,12,13,…,27,6,7,8,11,32…39` — so slots 12/13/22/23 are
-GPIO16/17/26/27.) On an unfamiliar board, `MODSWITCH_WALK_ON_BOOT 1` switches
-each channel on for a second in turn so you can see which output is coil 0
-without tracing the PCB.
+**The channel pins are not confirmed for the relay board yet.** The nearest
+published map is LC Technology's [`ESP32_Relay_X2`](https://templates.blakadder.com/ESP32_Relay_X2.html)
+Tasmota template, which exists in two revisions:
 
-The three RS485 pins avoid the channels, and also 16/17, which carry external
-PSRAM on a WROVER module.
+| Revision | Relay 1 | Relay 2 | LED |
+|---|---|---|---|
+| A | GPIO16 | GPIO17 | GPIO23 |
+| B | GPIO26 | GPIO25 | GPIO23 |
 
-UART2's *defaults* are GPIO16/17 — which are channels 1 and 2 here. Left on
-defaults, Modbus traffic shows up as two flickering outputs.
+That listing is a 5–60 V board, not the 7–28 V 30 A one, so treat it as a lead.
+**Revision B collides with RS485 DE on GPIO25** — if the board turns out to be
+B, move DE. `MODSWITCH_WALK_ON_BOOT 1` switches each channel on for a second in
+turn, coil 0 first, which settles it against the hardware. Then set
+`kChannels` in `Config.h`.
 
-**Fit a pull-down at every gate.** ESP32 pins float from power-on until firmware
-runs, and a floating gate on a logic-level MOSFET will conduct. The firmware
-parks each pin at its inactive level before enabling the pad and sets a matching
-internal pull, but nothing in software can cover the window before software
-runs.
+Reading Tasmota templates: on ESP32 the GPIO array is **not** indexed by GPIO
+number. Its slots run `0,1,2,3,4,5,9,10,12,13,…,27,6,7,8,11,32…39`.
 
-## Power, and the low-side consequence
+UART2's defaults are GPIO16/17. The RS485 pins are assigned explicitly so
+Modbus traffic can never land on an output.
 
-**The FETs switch low-side** — confirmed by inspecting the board, not by
-datasheet inference. The FET sits between the load and ground: load positive
-comes from V+, load negative goes to the output terminal, and the FET pulls it
-down. Three things follow.
+ESP32 pins float from power-on until firmware runs. The firmware parks each
+output at its inactive level before enabling the pad, with a matching internal
+pull, but only a physical pull-down on the relay driver's input covers the
+window before that. Check the board has one.
 
-**The load's positive is always live.** Switching happens on the return path, so
-a lamp is at supply potential even when "off". Any short from the *negative*
-wire to the frame turns that channel on and nothing in software can turn it off
-again — and that wire runs the length of the bike to the headlight. Route and
-protect it accordingly.
+## Wiring the load
 
-**A separately-grounded load cannot be switched at all.** If a lamp's negative
-is bonded to its own metal body and the body to its bracket, it finds a ground
-path around the FET and stays lit. Check continuity from lamp negative to lamp
-body before mounting anything.
+The relay contacts are isolated from the board, so the lamp circuit and the
+board's own supply are independent:
 
-**All load current returns through the board's GND.** The FET sources tie to
-the ground plane, so every channel's current leaves via the GND terminal. That
-wire goes to the battery negative and is sized for the *total* lamp current,
-never to a convenient thin chassis point.
+- Board `7-28V` input ← **switched** 12 V.
+- Relay **COM** ← battery positive through a fuse sized for the lamp.
+- Relay **NO** → lamp positive; lamp negative → ground.
 
-### Keeping the ESP off constant power
+Use **NO**, not NC: a de-energised relay — no power, no firmware yet, failsafe
+tripped — then means lamp off.
 
-Measured idle draw is **12 mA at 12 V** (80 MHz, `wifi_ps` max — see Settings).
-That is about 2 Ah a week, so a board left on constant 12 V will flatten a
-14 Ah battery in roughly three weeks. Firmware has taken this about as far as
-it goes; the rest is wiring.
-
-Because the switching is low-side, the lamp supply and the board supply do not
-have to be the same thing. Two ways to separate them:
-
-- **A relay, no board modification.** Battery → fuse → relay contacts → the
-  board's normal DC input, relay coil on switched ignition. Lamps draw through
-  the board's V+ track exactly as designed, and at ignition-off the whole thing
-  is dead: no drain, no live lamp positive, and a failed-short FET is harmless
-  while parked. The master is on switched power anyway, so this node has
-  nothing to do with the key out.
-- **Cut the V+ track** between the DC input and the output terminals' V+ pins,
-  feed the board from switched 12 V and inject battery 12 V at an output V+
-  pin. Electrically sound — that track is already rated for full load current,
-  since it carries it in normal use — but it leaves the lamp positive
-  permanently live, so the chafe risk above applies whenever the bike is
-  parked. Check what else the track feeds (flyback diodes, TVS, any voltage
-  sense) before cutting, and strain-relieve whatever replaces it.
-
-Either way: fuse at the battery, sized for the lamps, and the heavy ground
-above.
+The 7–28 V input has little headroom over an automotive load dump. Fit a TVS
+across it.
 
 ## HTTP
 
@@ -218,9 +184,9 @@ a reboot — do not reach for it to restart the board.
 
 ## Startup order, and why
 
-Gates are parked, then Modbus and the failsafe start, and **only then** Wi-Fi.
+Outputs are parked, then Modbus and the failsafe start, and **only then** Wi-Fi.
 
-This node's job is to switch four gates on command and drop them when command is
+This node's job is to switch its outputs on command and drop them when command is
 lost. None of that may wait on an access point, a DHCP lease, or a provisioning
 flow that might never complete. A network failure cannot take the actuator with
 it.
@@ -234,20 +200,14 @@ idf.py -p /dev/cu.usbserial-XXXX -b 230400 flash
 ```
 
 **Flash over the wire once, then use OTA.** The partition table is 4 MB
-dual-OTA (two 1.875 MB slots against a ~1 MB image) specifically so the serial
-port stops mattering, and on this hardware that is worth real effort to avoid:
-
-- The USB-serial adapter has **no DTR wired to IO0**, so esptool cannot put the
-  chip into download mode by itself. It resets (RTS → EN works) and then boots
-  straight into flash, and esptool reports either `Wrong boot mode detected
-  (0x13)` or `Invalid head of packet` — the latter being the application's own
-  log arriving where a sync response was expected.
-- Recovery is a jumper from **IO0 to GND** plus a power cycle.
+dual-OTA (two 1.875 MB slots against a ~1 MB image). For the wired flash, if the
+USB-serial adapter has no auto-reset, hold **BOOT**, tap **RST**, then release
+BOOT to enter download mode.
 
 OTA rollback is armed (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE`). A new image
 marks itself valid once it has an IP. Connectivity is the right health check
 even though the real job is Modbus, because an image that cannot reach the
-network cannot be replaced except with that jumper.
+network can only be replaced over a serial cable.
 
 **That wait has no deadline, deliberately.** The bootloader already covers both
 real failure modes: an image that crashes never reaches the check and is rolled
