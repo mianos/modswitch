@@ -14,20 +14,21 @@ namespace cfg {
 
 // The outputs, in coil order: coil 0 drives kChannels[0], and so on.
 //
-// PROVISIONAL. These are not yet confirmed for the ESP32_Relay_30A_X2. The
-// nearest published map, LC Technology's ESP32_Relay_X2 Tasmota template,
-// has two revisions: relays on 16/17, or on 26/25 with the LED on 23 either
-// way. This assumes revision A, the only one that does not collide with
-// kPinDe (25) below; if the walk shows revision B, move DE as well as these.
-// Confirm with MODSWITCH_WALK_ON_BOOT before wiring lamps.
-//   https://templates.blakadder.com/ESP32_Relay_X2.html
+// ESP32_Relay_30A_X2: relays on GPIO12 and GPIO13, traced with a multimeter on
+// the board itself. Neither published Tasmota map for LC Technology's
+// ESP32_Relay_X2 (16/17 or 26/25) applies to this 30A board — trust the
+// meter, not the template.
 //
-// Do not use GPIO 34-39: they are input-only on the classic ESP32. Avoid 6-11
-// (SPI flash) and, for an output, the strapping pins 0/2/5/12/15 — a pull-down
-// on a strapping pin can stop the board booting.
+// GPIO12 is a strapping pin: at reset it selects the flash voltage, and held
+// high it asks for 1.8V, which stops a 3.3V-flash module booting. Safe here
+// because its reset default is an internal pull-down, which also keeps the
+// relay open through boot. Never fit a pull-up to it.
+//
+// Do not use GPIO 34-39 for an output: they are input-only on the classic
+// ESP32. Avoid 6-11 (SPI flash).
 constexpr gpio_num_t kChannels[] = {
-    GPIO_NUM_16,   // relay 1 (revision A)
-    GPIO_NUM_17,   // relay 2 (revision A)
+    GPIO_NUM_12,   // relay 1
+    GPIO_NUM_13,   // relay 2
 };
 constexpr int kChannelCount = sizeof(kChannels) / sizeof(kChannels[0]);
 
@@ -38,13 +39,11 @@ constexpr bool kActiveLow = false;
 // RS485 / Modbus RTU
 // ---------------------------------------------------------------------------
 
-// UART2, on explicitly assigned pins. Its *defaults* are GPIO16/17, which are
-// candidate relay pins — left on defaults, Modbus traffic could land on an
-// output.
+// UART2, on explicitly assigned pins rather than its GPIO16/17 defaults, so
+// the port's placement is written down here rather than implied.
 //
 // These three avoid:
-//   16/17        the channels (revision A)
-//   26           relay 1 on revision B
+//   12/13        the relays
 //   23           link LED on the candidate relay boards
 //   1/3          UART0, the USB-serial console
 //   6-11         SPI flash

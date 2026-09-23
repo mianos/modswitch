@@ -103,32 +103,28 @@ there is nothing to recover.
 
 | Function | GPIO |
 |---|---|
-| Relays 1–2 | 16, 17 — **provisional** (revision A), see below |
+| Relays 1–2 | 12, 13 |
 | RS485 TX → transceiver DI | 32 |
 | RS485 RX → transceiver RO | 33 |
 | RS485 DE + /RE (tied) | 25 |
 | Console UART0 | 1, 3 |
 
-**The channel pins are not confirmed for the relay board yet.** The nearest
-published map is LC Technology's [`ESP32_Relay_X2`](https://templates.blakadder.com/ESP32_Relay_X2.html)
-Tasmota template, which exists in two revisions:
+The relay pins were **traced with a multimeter** on the ESP32_Relay_30A_X2.
+Neither published Tasmota map for LC Technology's
+[`ESP32_Relay_X2`](https://templates.blakadder.com/ESP32_Relay_X2.html)
+(16/17, or 26/25) applies to this 30 A board; driving 16/17 produced only a
+faint tick and no contact closure.
 
-| Revision | Relay 1 | Relay 2 | LED |
-|---|---|---|---|
-| A | GPIO16 | GPIO17 | GPIO23 |
-| B | GPIO26 | GPIO25 | GPIO23 |
-
-That listing is a 5–60 V board, not the 7–28 V 30 A one, so treat it as a lead.
-**Revision B collides with RS485 DE on GPIO25** — if the board turns out to be
-B, move DE. `MODSWITCH_WALK_ON_BOOT 1` switches each channel on for a second in
-turn, coil 0 first, which settles it against the hardware. Then set
-`kChannels` in `Config.h`.
+**GPIO12 is a strapping pin.** At reset it selects the flash voltage, and held
+high it asks for 1.8 V, which stops a 3.3 V-flash module booting. It is safe
+here because its reset default is an internal pull-down, which also keeps relay
+1 open through boot. Never fit a pull-up to it.
 
 Reading Tasmota templates: on ESP32 the GPIO array is **not** indexed by GPIO
 number. Its slots run `0,1,2,3,4,5,9,10,12,13,…,27,6,7,8,11,32…39`.
 
-UART2's defaults are GPIO16/17. The RS485 pins are assigned explicitly so
-Modbus traffic can never land on an output.
+The RS485 pins are assigned explicitly rather than left on UART2's GPIO16/17
+defaults.
 
 ESP32 pins float from power-on until firmware runs. The firmware parks each
 output at its inactive level before enabling the pad, with a matching internal
