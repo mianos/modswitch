@@ -1,7 +1,7 @@
 # modswitch
 
 A generic **Modbus RTU switch node** on a classic ESP32. It listens on RS485
-as a Modbus slave and drives N relay channels from N coils. (Formerly
+as a Modbus slave and drives two relay channels from two coils. (Formerly
 `mosnode`.)
 
 Built as the front-of-bike half of [mqttcan](../mqttcan): that board watches a
@@ -27,7 +27,7 @@ recovery path to get wrong.
 | Unit id | `1` |
 | Serial | 19200 8N1 |
 | Function codes | `0x0F` write multiple coils from coil 0; `0x10` write holding registers 0–1 for the clock; `0x01` read coils works but the master never uses it |
-| Coils | `0`–`3` → channels 1–4. Coil set ⇒ relay closed |
+| Coils | `0`–`1` → relays 1–2. Coil set ⇒ relay closed |
 | Holding regs | `0`–`1` → 32-bit Unix epoch, high word first |
 
 ## The clock
@@ -103,7 +103,7 @@ there is nothing to recover.
 
 | Function | GPIO |
 |---|---|
-| Channels | 16, 17, 26, 27 — **provisional**, see below |
+| Relays 1–2 | 16, 17 — **provisional** (revision A), see below |
 | RS485 TX → transceiver DI | 32 |
 | RS485 RX → transceiver RO | 33 |
 | RS485 DE + /RE (tied) | 25 |

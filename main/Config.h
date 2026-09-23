@@ -17,18 +17,17 @@ namespace cfg {
 // PROVISIONAL. These are not yet confirmed for the ESP32_Relay_30A_X2. The
 // nearest published map, LC Technology's ESP32_Relay_X2 Tasmota template,
 // has two revisions: relays on 16/17, or on 26/25 with the LED on 23 either
-// way. Revision B collides with kPinDe (25) below. Set this once
-// MODSWITCH_WALK_ON_BOOT has identified the board.
+// way. This assumes revision A, the only one that does not collide with
+// kPinDe (25) below; if the walk shows revision B, move DE as well as these.
+// Confirm with MODSWITCH_WALK_ON_BOOT before wiring lamps.
 //   https://templates.blakadder.com/ESP32_Relay_X2.html
 //
 // Do not use GPIO 34-39: they are input-only on the classic ESP32. Avoid 6-11
 // (SPI flash) and, for an output, the strapping pins 0/2/5/12/15 — a pull-down
 // on a strapping pin can stop the board booting.
 constexpr gpio_num_t kChannels[] = {
-    GPIO_NUM_16,
-    GPIO_NUM_17,
-    GPIO_NUM_26,
-    GPIO_NUM_27,
+    GPIO_NUM_16,   // relay 1 (revision A)
+    GPIO_NUM_17,   // relay 2 (revision A)
 };
 constexpr int kChannelCount = sizeof(kChannels) / sizeof(kChannels[0]);
 
@@ -44,7 +43,8 @@ constexpr bool kActiveLow = false;
 // output.
 //
 // These three avoid:
-//   16/17/26/27  the channels
+//   16/17        the channels (revision A)
+//   26           relay 1 on revision B
 //   23           link LED on the candidate relay boards
 //   1/3          UART0, the USB-serial console
 //   6-11         SPI flash

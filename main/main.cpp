@@ -1,7 +1,7 @@
 // modswitch — a generic Modbus RTU switch node.
 //
-// Listens on RS485 as a Modbus slave and drives N relay channels from N
-// coils. Built as the front-of-bike half of mqttcan: that board watches a BMW
+// Listens on RS485 as a Modbus slave and drives two relay channels from
+// two coils. Built as the front-of-bike half of mqttcan: that board watches a BMW
 // R1200GS's CAN bus, counts a triple click of the high beam, and writes the
 // coils here; this one switches the auxiliary driving lights. Nothing in it is
 // specific to that, though — it is coils to outputs, and the pin map is one
@@ -82,8 +82,8 @@ void onGotIp(void*, esp_event_base_t base, int32_t id, void*) {
 }
 
 // The coil bits, written directly by the Modbus stack when the master sends
-// FC 0x0F. One byte is eight coils, which is room for twice the channels this
-// board has.
+// FC 0x0F. One byte is eight coils, which is room for four times the channels
+// this board has.
 //
 // Volatile because the stack writes it from its own task while ours reads it.
 // That is not a substitute for synchronisation in general, but a single byte
