@@ -18,13 +18,13 @@ namespace cfg {
 // table (Relay 1-4 on GPIO 16/17/26/27, link LED on GPIO23):
 //   https://templates.blakadder.com/diynow_ESP32_MOS_X4.html
 //
-// That page is internally inconsistent and it is worth knowing which half to
-// trust. Its human-readable table says 16/17/26/27, but decoding the raw
-// GPIO array in its template JSON appears to give 12/13/22/23. The table
-// matches the board this was built against, so the table wins here — but if
-// this firmware ever lands on a board where nothing switches, that is the
-// first thing to suspect. MOSNODE_WALK_ON_BOOT below settles it against the
-// hardware rather than by argument.
+// The page's table and its template JSON agree. An earlier note here claimed
+// the JSON decoded to 12/13/22/23; that was a misreading. Tasmota's ESP32
+// template array is NOT indexed by GPIO number -- its positions run
+// 0,1,2,3,4,5,9,10,12,13,...,27,6,7,8,11,32..39 -- so array slots
+// 12/13/22/23 are GPIO16/17/26/27, exactly what the table says. Relevant
+// beyond this board: any blakadder template must be decoded with that order.
+// MOSNODE_WALK_ON_BOOT below still settles a pinout against the hardware.
 //
 // Do not use GPIO 34-39: they are input-only on the classic ESP32 and cannot
 // drive a gate. Avoid 6-11 (SPI flash) and, for an output, the strapping pins
@@ -48,11 +48,9 @@ constexpr bool kActiveLow = false;
 // MOSFET channels 1 and 2 on this board — left on defaults, Modbus traffic
 // would show up as two flickering outputs.
 //
-// These three are chosen to be safe under every pinout claim made about this
-// board, so a wiring loom does not have to be redone if the channel map turns
-// out to be the other one. They avoid:
-//   16/17/26/27  channels per the template's table
-//   12/13/22/23  channels per the template's raw JSON
+// These three avoid:
+//   16/17/26/27  the channels
+//   12/13/22     left clear from when the pinout was (wrongly) in doubt
 //   23           link LED
 //   1/3          UART0, the USB-serial console
 //   6-11         SPI flash

@@ -110,16 +110,16 @@ there is nothing to recover.
 
 The channel pins come from the [blakadder Tasmota
 template](https://templates.blakadder.com/diynow_ESP32_MOS_X4.html)'s function
-table. **That page is internally inconsistent**: its table says 16/17/26/27, but
-decoding the raw GPIO array in its template JSON appears to give 12/13/22/23.
-The table matches the board this was built against, so the table wins — but if
-this lands on a board where nothing switches, suspect that first and set
-`MOSNODE_WALK_ON_BOOT 1`, which switches each channel on for a second in turn so
-you can see which output is coil 0 without tracing the PCB.
+table, and its template JSON agrees. (An earlier version of this README said
+the JSON decoded to 12/13/22/23. That was a misreading: Tasmota's ESP32
+template array is not indexed by GPIO number — its slots run
+`0,1,2,3,4,5,9,10,12,13,…,27,6,7,8,11,32…39` — so slots 12/13/22/23 are
+GPIO16/17/26/27.) On an unfamiliar board, `MOSNODE_WALK_ON_BOOT 1` switches
+each channel on for a second in turn so you can see which output is coil 0
+without tracing the PCB.
 
-The three RS485 pins are chosen to be safe under *either* claim, so a loom does
-not have to be redone if the channel map turns out to be the other one. They
-also avoid 16/17, which carry external PSRAM on a WROVER module.
+The three RS485 pins avoid the channels, and also 16/17, which carry external
+PSRAM on a WROVER module.
 
 UART2's *defaults* are GPIO16/17 — which are channels 1 and 2 here. Left on
 defaults, Modbus traffic shows up as two flickering outputs.
