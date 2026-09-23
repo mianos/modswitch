@@ -95,6 +95,17 @@ Against the real mqttcan master over RS485, 2026-09-22:
 | Failsafe | master stopped with the lamps on → still on at t+3s and t+6s, **off at t+9s** against an 8000ms timeout |
 | Recovery | master restarted → lamps restored on the next heartbeat, no resync, `tripped` back to false |
 
+On the relay board (ESP32_Relay_30A_X2, transceiver on the board's 3.3 V
+rail), 2026-09-23:
+
+| | |
+|---|---|
+| Link | 111 writes at the master, 111 at the node, `modbus_err: 0`; a further window +29 ok / +0 err |
+| Clock | two time writes sent, `time_syncs: 2` on the node, correct local time |
+| Gesture | injected triple click → both relays closed, held 20 s by the heartbeat alone; single click → both open |
+| Failsafe | master's RS485 stopped at 18:18:48 with both relays closed → still closed at +3 s, **open at +5 s** (`last_trip_at` 18:18:53) |
+| Recovery | master restarted → relays restored on the next heartbeat, `tripped` back to false |
+
 That last row is the "state, not events" design paying for itself: the node
 converged on the correct state with no handshake and no recovery path, because
 there is nothing to recover.
