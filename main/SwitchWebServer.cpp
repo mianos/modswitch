@@ -11,6 +11,7 @@
 #include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -263,6 +264,15 @@ esp_err_t SwitchWebServer::status_get_handler(httpd_req_t* req) {
     // was actually running at rather than to what the source says today.
     resp.AddItem("cpu_mhz",         CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
     resp.AddItem("wifi_ps",         self->settings_.wifiPs);
+
+    // The node lives in a sealed enclosure under the fairing, so signal margin
+    // is worth seeing directly rather than inferring it from ping times, which
+    // wifi_ps inflates on its own.
+    wifi_ap_record_t ap;
+    if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+        resp.AddItem("rssi",         (int)ap.rssi);
+        resp.AddItem("wifi_channel", (int)ap.primary);
+    }
     return send_json(req, resp);
 }
 
