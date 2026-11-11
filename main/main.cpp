@@ -58,7 +58,7 @@
 #include "mbcontroller.h"
 
 #include "NvsStorageManager.h"
-#include "WebServer.h"
+#include "WifiWebServer.h"
 #include "WifiManager.h"
 
 #include "Config.h"
@@ -516,7 +516,7 @@ extern "C" void app_main(void) {
     applyWifiPs(settings.wifiPs);
     settings.onChange("wifi_ps", [] { applyWifiPs(settings.wifiPs); });
 
-    static WebContext webctx(&wifi);
+    static WifiWebContext webctx(&wifi);
     static SwitchWebServer web(&webctx, settings);
     web.start();
 

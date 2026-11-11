@@ -8,7 +8,7 @@ idf_component_register(SRCS "main.cpp" "SwitchWebServer.cpp"
                          nvsstoragemanager
                          wifimanager
                          settingsbase
-                         webserver
+                         webserver wifiwebserver
                          jsonwrapper
                          esp_driver_gpio
                          esp_driver_uart

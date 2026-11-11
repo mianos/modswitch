@@ -71,8 +71,8 @@ std::string uptimeString() {
 
 }  // namespace
 
-SwitchWebServer::SwitchWebServer(WebContext* ctx, Settings& settings)
-    : WebServer(ctx), settings_(settings) {}
+SwitchWebServer::SwitchWebServer(WifiWebContext* ctx, Settings& settings)
+    : WifiWebServer(ctx), settings_(settings) {}
 
 // The shared base already emits a numeric "uptime" and a "time", so this adds
 // the human uptime under its own key and qualifies the base's clock rather than

@@ -4,7 +4,7 @@
 #include "esp_http_server.h"
 
 #include "JsonWrapper.h"
-#include "WebServer.h"
+#include "WifiWebServer.h"
 
 struct Settings;
 
@@ -22,9 +22,9 @@ struct Settings;
 // updates go over Wi-Fi and the serial port is only needed for recovery.
 //
 // Handlers recover this instance from req->user_ctx.
-class SwitchWebServer : public WebServer {
+class SwitchWebServer : public WifiWebServer {
 public:
-    SwitchWebServer(WebContext* ctx, Settings& settings);
+    SwitchWebServer(WifiWebContext* ctx, Settings& settings);
 
     esp_err_t start() override;
 
